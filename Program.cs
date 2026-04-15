@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Linq;
 using System.Collections.Generic;
@@ -8,6 +10,8 @@ using Silk.NET.Input;
 using Silk.NET.OpenGL;
 using Silk.NET.OpenGL.Extensions.ImGui;
 using Silk.NET.Windowing;
+using Silk.NET.Windowing.Glfw;
+using Silk.NET.Input.Glfw;
 using ImGuiNET;
 using System.Numerics;
 
@@ -36,6 +40,9 @@ namespace Shark
         {
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
+            GlfwWindowing.RegisterPlatform();
+            GlfwInput.RegisterPlatform();
+            
             var options = WindowOptions.Default;
             options.Size = new Silk.NET.Maths.Vector2D<int>(1440, 900);
             options.Title = "Shark";
@@ -59,19 +66,32 @@ namespace Shark
             imGuiController = new ImGuiController(gl, window, inputContext, onConfigureIO: () => 
             {
                 var io = ImGui.GetIO();
-                string fontPath = "./SpaceMono-Regular.ttf";
+                var assembly = Assembly.GetExecutingAssembly();
+                using var stream = assembly.GetManifestResourceStream("Shark.SpaceMono-Regular.ttf");
                 
-                float oversampleScale = 2.0f;
-                float baseFontSize = 16.0f;
-                
-                if (File.Exists(fontPath))
+                if (stream != null)
                 {
-                    var font = io.Fonts.AddFontFromFileTTF(fontPath, baseFontSize * oversampleScale);
-                    font.Scale = 1.0f / oversampleScale;
+                    int fontDataLength = (int)stream.Length;
+                    
+                    unsafe
+                    {
+                        byte* nativePtr = (byte*)NativeMemory.Alloc((nuint)fontDataLength);
+                        
+                        using (UnmanagedMemoryStream writeStream = new UnmanagedMemoryStream(nativePtr, fontDataLength, fontDataLength, FileAccess.Write))
+                        {
+                            stream.CopyTo(writeStream);
+                        }
+                
+                        float oversampleScale = 2.0f;
+                        float baseFontSize = 16.0f;
+                        
+                        var font = io.Fonts.AddFontFromMemoryTTF((IntPtr)nativePtr, fontDataLength, baseFontSize * oversampleScale);
+                        font.Scale = 1.0f / oversampleScale;
+                    }
                 }
                 else
                 {
-                    Console.WriteLine($"Warning: {fontPath} not found. Falling back to default font.");
+                    Console.WriteLine("Warning: font not found. Falling back to default font.");
                 }
             });
 
