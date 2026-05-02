@@ -181,6 +181,36 @@ namespace Shark
 
         private static void OnRender(double delta)
         {
+            if (inputContext != null && inputContext.Keyboards.Count > 0)
+            {
+                var io = ImGui.GetIO();
+                var kb = inputContext.Keyboards[0];
+                
+                bool ctrl = kb.IsKeyPressed(Key.ControlLeft) || kb.IsKeyPressed(Key.ControlRight);
+                bool shift = kb.IsKeyPressed(Key.ShiftLeft) || kb.IsKeyPressed(Key.ShiftRight);
+                bool alt = kb.IsKeyPressed(Key.AltLeft) || kb.IsKeyPressed(Key.AltRight);
+                bool super = kb.IsKeyPressed(Key.SuperLeft) || kb.IsKeyPressed(Key.SuperRight);
+                
+                io.KeyCtrl = ctrl;
+                io.KeyShift = shift;
+                io.KeyAlt = alt;
+                io.KeySuper = super;
+                
+                io.AddKeyEvent(ImGuiKey.ModCtrl, ctrl);
+                io.AddKeyEvent(ImGuiKey.ModShift, shift);
+                io.AddKeyEvent(ImGuiKey.ModAlt, alt);
+                io.AddKeyEvent(ImGuiKey.ModSuper, super);
+
+                io.AddKeyEvent(ImGuiKey.Backspace, kb.IsKeyPressed(Key.Backspace));
+                io.AddKeyEvent(ImGuiKey.Delete, kb.IsKeyPressed(Key.Delete));
+                io.AddKeyEvent(ImGuiKey.LeftArrow, kb.IsKeyPressed(Key.Left));
+                io.AddKeyEvent(ImGuiKey.RightArrow, kb.IsKeyPressed(Key.Right));
+                io.AddKeyEvent(ImGuiKey.UpArrow, kb.IsKeyPressed(Key.Up));
+                io.AddKeyEvent(ImGuiKey.DownArrow, kb.IsKeyPressed(Key.Down));
+                io.AddKeyEvent(ImGuiKey.Enter, kb.IsKeyPressed(Key.Enter));
+                io.AddKeyEvent(ImGuiKey.Escape, kb.IsKeyPressed(Key.Escape));
+            }
+            
             imGuiController.Update((float)delta);
             
             if (window.Size.X > 0 && window.Size.Y > 0)
@@ -441,6 +471,27 @@ namespace Shark
             bool hasSelection = selectedIndex >= 0;
             if (hasSelection)
             {
+                ImGui.SameLine();
+                if (ImGui.Button("Duplicate"))
+                {
+                    if (selectedType == 0 && selectedIndex < archive.Programs.Items.Count)
+                    {
+                        var copy = new ShaderProgram();
+                        copy.Load(archive.Programs.Items[selectedIndex].Save(), 0);
+                        copy.Name += "_copy";
+                        archive.Programs.Items.Insert(selectedIndex + 1, copy);
+                        selectedIndex++;
+                    }
+                    else if (selectedType == 1 && selectedIndex < archive.Codes.Items.Count)
+                    {
+                        var copy = new ShaderSource();
+                        copy.Load(archive.Codes.Items[selectedIndex].Save(), 0);
+                        copy.Name += "_copy";
+                        archive.Codes.Items.Insert(selectedIndex + 1, copy);
+                        selectedIndex++;
+                    }
+                }
+                
                 ImGui.SameLine();
                 ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.6f, 0.2f, 0.2f, 1.0f));
                 ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.8f, 0.3f, 0.3f, 1.0f));
@@ -747,6 +798,17 @@ namespace Shark
         }
     }
 
+    public static class StringUtils
+    {
+        public static string ReadZString(byte[] data, int pos, int len, Encoding? encoding = null)
+        {
+            encoding ??= Encoding.UTF8;
+            string s = encoding.GetString(data, pos, len);
+            int idx = s.IndexOf('\0');
+            return idx >= 0 ? s.Substring(0, idx) : s;
+        }
+    }
+
     public static class GlslCodeEditor
     {
         public static void Draw(ref string code)
@@ -958,7 +1020,7 @@ namespace Shark
             FileSize = BitConverter.ToUInt32(data, pos + 8);
             Endianness = BitConverter.ToUInt32(data, pos + 12);
             uint nameLen = BitConverter.ToUInt32(data, pos + 16);
-            Name = Encoding.UTF8.GetString(data, pos + 20, (int)nameLen).TrimEnd('\0');
+            Name = StringUtils.ReadZString(data, pos + 20, (int)nameLen);
             Size = 20 + nameLen;
         }
 
@@ -988,9 +1050,9 @@ namespace Shark
             uint nameLen = BitConverter.ToUInt32(data, pos + 4);
             uint valueLen = BitConverter.ToUInt32(data, pos + 8);
             int p = pos + 12;
-            Name = Encoding.UTF8.GetString(data, p, (int)nameLen).TrimEnd('\0');
+            Name = StringUtils.ReadZString(data, p, (int)nameLen);
             p += (int)nameLen;
-            Value = Encoding.UTF8.GetString(data, p, (int)valueLen).TrimEnd('\0');
+            Value = StringUtils.ReadZString(data, p, (int)valueLen);
         }
 
         public override byte[] Save()
@@ -1027,8 +1089,8 @@ namespace Shark
             uint varCount = BitConverter.ToUInt32(data, pos + 20);
 
             int p = pos + 24;
-            Name = Encoding.UTF8.GetString(data, p, (int)nameLen).TrimEnd('\0'); p += (int)nameLen;
-            ID = Encoding.UTF8.GetString(data, p, (int)idLen).TrimEnd('\0'); p += (int)idLen;
+            Name = StringUtils.ReadZString(data, p, (int)nameLen); p += (int)nameLen;
+            ID = StringUtils.ReadZString(data, p, (int)idLen); p += (int)idLen;
 
             DefaultValue = new byte[defLen];
             Array.Copy(data, p, DefaultValue, 0, defLen); p += (int)defLen;
@@ -1072,7 +1134,7 @@ namespace Shark
             uint idLen = BitConverter.ToUInt32(data, pos + 12);
 
             int p = pos + 16;
-            Name = Encoding.UTF8.GetString(data, p, (int)nameLen).TrimEnd('\0'); p += (int)nameLen;
+            Name = StringUtils.ReadZString(data, p, (int)nameLen); p += (int)nameLen;
 
             Values.Clear();
             for (int i = 0; i < vCount; i++)
@@ -1081,9 +1143,9 @@ namespace Shark
                 int s_pos = p++;
                 while (data[p] != 0) p++;
                 p++;
-                Values.Add(Encoding.UTF8.GetString(data, s_pos, p - s_pos).TrimEnd('\0'));
+                Values.Add(StringUtils.ReadZString(data, s_pos, p - s_pos));
             }
-            ID = Encoding.UTF8.GetString(data, p, (int)idLen).TrimEnd('\0');
+            ID = StringUtils.ReadZString(data, p, (int)idLen);
         }
 
         public override byte[] Save()
@@ -1124,7 +1186,7 @@ namespace Shark
             _codeLen2 = BitConverter.ToUInt32(data, pos + 12);
 
             int p = pos + 16;
-            Name = Encoding.UTF8.GetString(data, p, (int)nameLen).TrimEnd('\0'); p += (int)nameLen;
+            Name = StringUtils.ReadZString(data, p, (int)nameLen); p += (int)nameLen;
             Code = Encoding.GetEncoding("shift_jis").GetString(data, p, (int)codeLen);
         }
 
@@ -1174,7 +1236,7 @@ namespace Shark
             GeoShIdx = BitConverter.ToInt32(data, pos + 16);
 
             int p = pos + 20;
-            Name = Encoding.UTF8.GetString(data, p, (int)nameLen).TrimEnd('\0'); p += (int)nameLen;
+            Name = StringUtils.ReadZString(data, p, (int)nameLen); p += (int)nameLen;
 
             VertexMacros.Load(data, p); p += (int)VertexMacros.Size;
             FragmentMacros.Load(data, p); p += (int)FragmentMacros.Size;
