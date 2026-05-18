@@ -1,11 +1,6 @@
-using System;
-using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Linq;
-using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using Silk.NET.Input;
 using Silk.NET.OpenGL;
 using Silk.NET.OpenGL.Extensions.ImGui;
