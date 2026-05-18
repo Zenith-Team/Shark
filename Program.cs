@@ -29,7 +29,7 @@ namespace Shark
         static SharcArchive? archive = null;
         static int selectedType = -1; // 0 = Program, 1 = Source
         static int selectedIndex = -1;
-        
+
         static string currentFilePath = "";
 
         static bool shouldExit = false;
@@ -44,15 +44,17 @@ namespace Shark
 
         static void Main()
         {
-            try {
+            try
+            {
                 if (File.Exists("config.txt")) gshCompilePath = File.ReadAllText("config.txt").Trim();
-            } catch {}
+            }
+            catch { }
 
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
             GlfwWindowing.RegisterPlatform();
             GlfwInput.RegisterPlatform();
-            
+
             var options = WindowOptions.Default;
             options.Size = new Silk.NET.Maths.Vector2D<int>(1440, 900);
             options.Title = "Shark";
@@ -75,28 +77,28 @@ namespace Shark
             gl = window.CreateOpenGL();
             inputContext = window.CreateInput();
 
-            imGuiController = new ImGuiController(gl, window, inputContext, onConfigureIO: () => 
+            imGuiController = new ImGuiController(gl, window, inputContext, onConfigureIO: () =>
             {
                 var io = ImGui.GetIO();
                 var assembly = Assembly.GetExecutingAssembly();
                 using var stream = assembly.GetManifestResourceStream("Shark.SpaceMono-Regular.ttf");
-                
+
                 if (stream != null)
                 {
                     int fontDataLength = (int)stream.Length;
-                    
+
                     unsafe
                     {
                         byte* nativePtr = (byte*)NativeMemory.Alloc((nuint)fontDataLength);
-                        
+
                         using (UnmanagedMemoryStream writeStream = new UnmanagedMemoryStream(nativePtr, fontDataLength, fontDataLength, FileAccess.Write))
                         {
                             stream.CopyTo(writeStream);
                         }
-                
+
                         float oversampleScale = 2.0f;
                         float baseFontSize = 16.0f;
-                        
+
                         var font = io.Fonts.AddFontFromMemoryTTF((IntPtr)nativePtr, fontDataLength, baseFontSize * oversampleScale);
                         font.Scale = 1.0f / oversampleScale;
                     }
@@ -118,14 +120,14 @@ namespace Shark
                 catch (Exception ex) { Console.WriteLine(ex); }
             }
         }
-        
+
         private static bool HasDuplicateNames()
         {
             if (archive == null) return false;
-            
+
             bool hasDupPrograms = archive.Programs.Items.GroupBy(p => p.Name).Any(g => g.Count() > 1);
             bool hasDupCodes = archive.Codes.Items.GroupBy(c => c.Name).Any(g => g.Count() > 1);
-            
+
             return hasDupPrograms || hasDupCodes;
         }
 
@@ -197,17 +199,17 @@ namespace Shark
             {
                 var io = ImGui.GetIO();
                 var kb = inputContext.Keyboards[0];
-                
+
                 bool ctrl = kb.IsKeyPressed(Key.ControlLeft) || kb.IsKeyPressed(Key.ControlRight);
                 bool shift = kb.IsKeyPressed(Key.ShiftLeft) || kb.IsKeyPressed(Key.ShiftRight);
                 bool alt = kb.IsKeyPressed(Key.AltLeft) || kb.IsKeyPressed(Key.AltRight);
                 bool super = kb.IsKeyPressed(Key.SuperLeft) || kb.IsKeyPressed(Key.SuperRight);
-                
+
                 io.KeyCtrl = ctrl;
                 io.KeyShift = shift;
                 io.KeyAlt = alt;
                 io.KeySuper = super;
-                
+
                 io.AddKeyEvent(ImGuiKey.ModCtrl, ctrl);
                 io.AddKeyEvent(ImGuiKey.ModShift, shift);
                 io.AddKeyEvent(ImGuiKey.ModAlt, alt);
@@ -222,9 +224,9 @@ namespace Shark
                 io.AddKeyEvent(ImGuiKey.Enter, kb.IsKeyPressed(Key.Enter));
                 io.AddKeyEvent(ImGuiKey.Escape, kb.IsKeyPressed(Key.Escape));
             }
-            
+
             imGuiController.Update((float)delta);
-            
+
             if (window.Size.X > 0 && window.Size.Y > 0)
             {
                 var io = ImGui.GetIO();
@@ -273,33 +275,33 @@ namespace Shark
             var viewport = ImGui.GetMainViewport();
             ImGui.SetNextWindowPos(viewport.Pos);
             ImGui.SetNextWindowSize(viewport.Size);
-            
+
             ImGui.Begin("Main Workspace", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.MenuBar | ImGuiWindowFlags.NoBringToFrontOnFocus);
 
             if (ImGui.BeginMenuBar())
             {
                 if (ImGui.BeginMenu("File"))
                 {
-                    if (ImGui.MenuItem("New Archive")) 
-                    { 
+                    if (ImGui.MenuItem("New Archive"))
+                    {
                         if (archive != null) { pendingAction = ConfirmAction.New; showConfirmModal = true; }
                         else CreateNewArchive();
                     }
-                    
-                    if (ImGui.MenuItem("Open...")) 
-                    { 
+
+                    if (ImGui.MenuItem("Open..."))
+                    {
                         if (archive != null) { pendingAction = ConfirmAction.Open; showConfirmModal = true; }
                         else ExecuteOpen();
                     }
-                    
-                    if (ImGui.MenuItem("Save", archive != null)) 
+
+                    if (ImGui.MenuItem("Save", archive != null))
                     {
                         if (HasDuplicateNames()) showDuplicateModal = true;
                         else PerformSave();
                     }
-                    
-                    if (ImGui.MenuItem("Save As...", archive != null)) 
-                    { 
+
+                    if (ImGui.MenuItem("Save As...", archive != null))
+                    {
                         if (HasDuplicateNames()) showDuplicateModal = true;
                         else
                         {
@@ -311,7 +313,7 @@ namespace Shark
                             }
                         }
                     }
-                    
+
                     ImGui.Separator();
 
                     if (ImGui.MenuItem("Close Archive", archive != null))
@@ -319,8 +321,8 @@ namespace Shark
                         pendingAction = ConfirmAction.Close; showConfirmModal = true;
                     }
 
-                    if (ImGui.MenuItem("Exit")) 
-                    { 
+                    if (ImGui.MenuItem("Exit"))
+                    {
                         if (archive != null) { pendingAction = ConfirmAction.Exit; showConfirmModal = true; }
                         else shouldExit = true;
                     }
@@ -346,13 +348,13 @@ namespace Shark
                     ImGui.TableSetupColumn("Hierarchy", ImGuiTableColumnFlags.WidthFixed, 300f);
                     ImGui.TableSetupColumn("Inspector", ImGuiTableColumnFlags.WidthStretch);
                     ImGui.TableNextRow();
-                    
+
                     ImGui.TableNextColumn();
                     DrawLeftPanel();
-                    
+
                     ImGui.TableNextColumn();
                     DrawRightPanel();
-                    
+
                     ImGui.EndTable();
                 }
             }
@@ -372,13 +374,13 @@ namespace Shark
             if (showDuplicateModal) { ImGui.OpenPopup("Save Blocked"); showDuplicateModal = false; }
             if (showCompilerErrorModal) { ImGui.OpenPopup("Compiler Error"); showCompilerErrorModal = false; }
             if (showPreferencesModal) { ImGui.OpenPopup("Preferences"); showPreferencesModal = false; }
-            
+
             bool confirmModalOpen = true;
             if (ImGui.BeginPopupModal("Confirm Action", ref confirmModalOpen, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoSavedSettings))
             {
                 ImGui.Text("Do you want to save your changes?");
                 ImGui.Spacing(); ImGui.Spacing();
-                
+
                 if (ImGui.Button("Yes (Save)", new Vector2(130, 0)))
                 {
                     if (HasDuplicateNames())
@@ -386,21 +388,21 @@ namespace Shark
                         showDuplicateModal = true;
                         ImGui.CloseCurrentPopup();
                     }
-                    else if (PerformSave()) 
+                    else if (PerformSave())
                     {
                         ExecutePendingAction();
                         ImGui.CloseCurrentPopup();
                     }
                 }
                 ImGui.SameLine();
-                
+
                 if (ImGui.Button("No (Discard)", new Vector2(130, 0)))
                 {
                     ExecutePendingAction();
                     ImGui.CloseCurrentPopup();
                 }
                 ImGui.SameLine();
-                
+
                 if (ImGui.Button("Cancel", new Vector2(100, 0)))
                 {
                     pendingAction = ConfirmAction.None;
@@ -416,7 +418,7 @@ namespace Shark
                 ImGui.Text("Multiple programs or sources share the same name.");
                 ImGui.Text("This will cause file corruption on save. Please rename the conflicting items.");
                 ImGui.Spacing(); ImGui.Spacing();
-                
+
                 if (ImGui.Button("OK", new Vector2(120, 0)))
                 {
                     pendingAction = ConfirmAction.None;
@@ -432,7 +434,7 @@ namespace Shark
                 ImGui.Separator();
                 ImGui.Text(compilerErrorMessage);
                 ImGui.Spacing(); ImGui.Spacing();
-                
+
                 if (ImGui.Button("Close", new Vector2(100, 0)))
                 {
                     ImGui.CloseCurrentPopup();
@@ -450,16 +452,16 @@ namespace Shark
                 if (ImGui.Button("Browse..."))
                 {
                     string? newPath = NativeFileDialog.ShowOpenFileDialog("Executables (*.exe)|*.exe|All Files (*.*)|*.*");
-                    if (!string.IsNullOrEmpty(newPath)) 
+                    if (!string.IsNullOrEmpty(newPath))
                     {
                         gshCompilePath = newPath;
-                        try { File.WriteAllText("config.txt", gshCompilePath); } catch {}
+                        try { File.WriteAllText("config.txt", gshCompilePath); } catch { }
                     }
                 }
                 ImGui.Spacing(); ImGui.Spacing();
                 if (ImGui.Button("Close", new Vector2(100, 0)))
                 {
-                    try { File.WriteAllText("config.txt", gshCompilePath); } catch {}
+                    try { File.WriteAllText("config.txt", gshCompilePath); } catch { }
                     ImGui.CloseCurrentPopup();
                 }
                 ImGui.EndPopup();
@@ -472,7 +474,7 @@ namespace Shark
             else if (pendingAction == ConfirmAction.Open) ExecuteOpen();
             else if (pendingAction == ConfirmAction.Close) CloseArchive();
             else if (pendingAction == ConfirmAction.Exit) shouldExit = true;
-            
+
             pendingAction = ConfirmAction.None;
         }
 
@@ -530,11 +532,11 @@ namespace Shark
             float nextX;
 
             if (ImGui.Button("+ Program")) archive.Programs.Items.Add(new ShaderProgram { Name = "NewProgram" });
-            
+
             nextX = ImGui.GetItemRectMax().X + style.ItemSpacing.X + ImGui.CalcTextSize("+ Source").X + style.FramePadding.X * 2.0f;
             if (nextX < windowVisibleX2) ImGui.SameLine();
             if (ImGui.Button("+ Source")) archive.Codes.Items.Add(new ShaderSource { Name = "new_source.glsl", Code = "// Write GLSL here\n" });
-            
+
             bool hasSelection = selectedIndex >= 0;
             if (hasSelection)
             {
@@ -559,7 +561,7 @@ namespace Shark
                         selectedIndex++;
                     }
                 }
-                
+
                 nextX = ImGui.GetItemRectMax().X + style.ItemSpacing.X + ImGui.CalcTextSize("Delete").X + style.FramePadding.X * 2.0f;
                 if (nextX < windowVisibleX2) ImGui.SameLine();
                 ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.6f, 0.2f, 0.2f, 1.0f));
@@ -579,26 +581,27 @@ namespace Shark
             if (ImGui.Button("Compile..."))
             {
                 if (HasDuplicateNames()) showDuplicateModal = true;
-                else if (!File.Exists(gshCompilePath)) 
+                else if (!File.Exists(gshCompilePath))
                 {
                     compilerErrorMessage = $"gshCompile.exe not found at:\n{gshCompilePath}\n\nPlease update the gshCompilePath via Edit -> Preferences.";
                     showCompilerErrorModal = true;
                 }
-                else 
+                else
                 {
                     string? path = NativeFileDialog.ShowSaveFileDialog("SharcFB Files (*.sharcfb)|*.sharcfb|All Files (*.*)|*.*");
-                    if (!string.IsNullOrEmpty(path)) 
+                    if (!string.IsNullOrEmpty(path))
                     {
-                        try { SharcCompiler.CompileAndSave(archive, path); } 
-                        catch (Exception ex) { 
-                            compilerErrorMessage = "Compilation Failed:\n" + ex.Message; 
-                            showCompilerErrorModal = true; 
+                        try { SharcCompiler.CompileAndSave(archive, path); }
+                        catch (Exception ex)
+                        {
+                            compilerErrorMessage = "Compilation Failed:\n" + ex.Message;
+                            showCompilerErrorModal = true;
                         }
                     }
                 }
             }
             ImGui.PopStyleColor();
-            
+
             ImGui.Separator();
             ImGui.Spacing();
 
@@ -615,16 +618,17 @@ namespace Shark
                     bool isSelected = (selectedType == 0 && selectedIndex == i);
                     bool isDuplicate = dupPrograms.Contains(archive.Programs.Items[i].Name);
 
-                    if (isDuplicate) 
+                    if (isDuplicate)
                         ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.7f, 0.2f, 0.2f, 1.0f));
 
-                    if (ImGui.Selectable($"{archive.Programs.Items[i].Name}##p{i}", isSelected)) {
+                    if (ImGui.Selectable($"{archive.Programs.Items[i].Name}##p{i}", isSelected))
+                    {
                         selectedType = 0; selectedIndex = i;
                     }
 
-                    if (isDuplicate) 
+                    if (isDuplicate)
                     {
-                        if (ImGui.IsItemHovered()) 
+                        if (ImGui.IsItemHovered())
                             ImGui.SetTooltip("Duplicate name detected! This will cause corruption on save.");
                         ImGui.PopStyleColor();
                     }
@@ -641,16 +645,17 @@ namespace Shark
                     bool isSelected = (selectedType == 1 && selectedIndex == i);
                     bool isDuplicate = dupCodes.Contains(archive.Codes.Items[i].Name);
 
-                    if (isDuplicate) 
+                    if (isDuplicate)
                         ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.7f, 0.2f, 0.2f, 1.0f));
 
-                    if (ImGui.Selectable($"{archive.Codes.Items[i].Name}##c{i}", isSelected)) {
+                    if (ImGui.Selectable($"{archive.Codes.Items[i].Name}##c{i}", isSelected))
+                    {
                         selectedType = 1; selectedIndex = i;
                     }
 
-                    if (isDuplicate) 
+                    if (isDuplicate)
                     {
-                        if (ImGui.IsItemHovered()) 
+                        if (ImGui.IsItemHovered())
                             ImGui.SetTooltip("Duplicate name detected! This will cause corruption on save.");
                         ImGui.PopStyleColor();
                     }
@@ -670,7 +675,7 @@ namespace Shark
             if (selectedType == 0 && selectedIndex >= 0 && selectedIndex < archive.Programs.Items.Count)
             {
                 var prog = archive.Programs.Items[selectedIndex];
-                
+
                 ImGui.TextColored(new Vector4(0.4f, 0.8f, 1.0f, 1.0f), "PROGRAM EDITOR");
                 ImGui.Separator();
                 ImGui.Spacing();
@@ -683,13 +688,14 @@ namespace Shark
                 if (ImGui.InputText("##ProgName", ref name, 256)) prog.Name = name;
 
                 ImGui.Spacing(); ImGui.Spacing();
-                
+
                 if (ImGui.BeginTabBar("ProgramTabs"))
                 {
                     if (ImGui.BeginTabItem(" Vertex ")) { DrawShaderStage(prog, 0); ImGui.EndTabItem(); }
                     if (ImGui.BeginTabItem(" Fragment ")) { DrawShaderStage(prog, 1); ImGui.EndTabItem(); }
                     if (ImGui.BeginTabItem(" Geometry ")) { DrawShaderStage(prog, 2); ImGui.EndTabItem(); }
-                    if (ImGui.BeginTabItem(" Uniforms ")) {
+                    if (ImGui.BeginTabItem(" Uniforms "))
+                    {
                         DrawSymbolTable("Uniform Blocks", prog.UniformBlocks, true, true);
                         DrawSymbolTable("Uniform Variables", prog.UniformVariables, true, true);
                         ImGui.EndTabItem();
@@ -702,7 +708,7 @@ namespace Shark
             else if (selectedType == 1 && selectedIndex >= 0 && selectedIndex < archive.Codes.Items.Count)
             {
                 var source = archive.Codes.Items[selectedIndex];
-                
+
                 ImGui.TextColored(new Vector4(0.4f, 1.0f, 0.6f, 1.0f), "SOURCE EDITOR");
                 ImGui.Separator();
                 ImGui.Spacing();
@@ -715,8 +721,8 @@ namespace Shark
                 if (ImGui.InputText("##SourceName", ref name, 256)) source.Name = name;
 
                 ImGui.Spacing();
-                
-                ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]); 
+
+                ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
                 string code = source.Code;
                 GlslCodeEditor.Draw(ref code);
                 source.Code = code;
@@ -737,21 +743,24 @@ namespace Shark
             if (archive == null) return;
 
             string[] sourceNames = archive.Codes.Items.Select(c => c.Name).ToArray();
-            
+
             ImGui.Spacing(); ImGui.Spacing();
             ImGui.AlignTextToFramePadding();
             ImGui.Text("Linked Source:");
             ImGui.SameLine();
-            
-            if (stage == 0) {
+
+            if (stage == 0)
+            {
                 int idx = prog.VtxShIdx; DrawCombo("##VtxCombo", ref idx, sourceNames); prog.VtxShIdx = idx;
                 ImGui.Spacing(); DrawMacroTable("Vertex Macros", prog.VertexMacros);
             }
-            else if (stage == 1) {
+            else if (stage == 1)
+            {
                 int idx = prog.FrgShIdx; DrawCombo("##FrgCombo", ref idx, sourceNames); prog.FrgShIdx = idx;
                 ImGui.Spacing(); DrawMacroTable("Fragment Macros", prog.FragmentMacros);
             }
-            else if (stage == 2) {
+            else if (stage == 2)
+            {
                 int idx = prog.GeoShIdx; DrawCombo("##GeoCombo", ref idx, sourceNames); prog.GeoShIdx = idx;
                 ImGui.Spacing(); DrawMacroTable("Geometry Macros", prog.GeometryMacros);
             }
@@ -787,7 +796,7 @@ namespace Shark
                 {
                     var m = macros.Items[i];
                     ImGui.TableNextRow();
-                    
+
                     ImGui.TableNextColumn();
                     string name = m.Name;
                     ImGui.SetNextItemWidth(-1.0f);
@@ -814,10 +823,10 @@ namespace Shark
             ImGui.Text(title);
             ImGui.SameLine(ImGui.GetContentRegionAvail().X - 80);
             if (ImGui.Button($"+ Add Item##{title}", new Vector2(80, 0))) list.Items.Add(new ShaderSymbol { Name = "NewSym", ID = "new_id" });
-        
+
             int cols = 3 + (showOffset ? 1 : 0) + (showDefault ? 1 : 0);
             var tableFlags = ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.BordersOuter | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable;
-            
+
             if (ImGui.BeginTable($"##Table_{title}", cols, tableFlags))
             {
                 ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
@@ -826,35 +835,37 @@ namespace Shark
                 if (showDefault) ImGui.TableSetupColumn("Default Val (Hex)", ImGuiTableColumnFlags.WidthStretch);
                 ImGui.TableSetupColumn("Act", ImGuiTableColumnFlags.WidthFixed, 35f);
                 ImGui.TableHeadersRow();
-        
+
                 for (int i = 0; i < list.Items.Count; i++)
                 {
                     var sym = list.Items[i];
                     ImGui.TableNextRow();
-        
+
                     ImGui.TableNextColumn();
                     string name = sym.Name; ImGui.SetNextItemWidth(-1.0f);
                     if (ImGui.InputText($"##name{i}_{title}", ref name, 256)) sym.Name = name;
-        
+
                     ImGui.TableNextColumn();
                     string id = sym.ID; ImGui.SetNextItemWidth(-1.0f);
                     if (ImGui.InputText($"##id{i}_{title}", ref id, 256)) sym.ID = id;
-        
-                    if (showOffset) {
+
+                    if (showOffset)
+                    {
                         ImGui.TableNextColumn();
                         int param = sym.Param; ImGui.SetNextItemWidth(-1.0f);
                         if (ImGui.InputInt($"##param{i}_{title}", ref param, 0)) sym.Param = param;
                     }
-        
-                    if (showDefault) {
+
+                    if (showDefault)
+                    {
                         ImGui.TableNextColumn();
                         string hex = BitConverter.ToString(sym.DefaultValue).Replace("-", " ");
                         ImGui.SetNextItemWidth(-1.0f);
                         if (ImGui.InputText($"##defval{i}_{title}", ref hex, 512)) sym.DefaultValue = HexToBytes(hex);
                     }
-        
+
                     ImGui.TableNextColumn();
-                    
+
                     ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.6f, 0.2f, 0.2f, 1.0f));
                     ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.8f, 0.3f, 0.3f, 1.0f));
                     if (ImGui.Button($"X##{i}_{title}", new Vector2(35, 0))) { list.Items.RemoveAt(i); i--; }
@@ -868,11 +879,13 @@ namespace Shark
         {
             hex = hex.Replace(" ", "").Replace("-", "");
             if (hex.Length % 2 != 0) return Array.Empty<byte>();
-            try {
+            try
+            {
                 byte[] ret = new byte[hex.Length / 2];
                 for (int i = 0; i < ret.Length; i++) ret[i] = Convert.ToByte(hex.Substring(i * 2, 2), 16);
                 return ret;
-            } catch { return Array.Empty<byte>(); }
+            }
+            catch { return Array.Empty<byte>(); }
         }
 
         static void LoadFile(string path)
@@ -919,7 +932,7 @@ namespace Shark
             string[] lines = code.Split('\n');
             int lineCount = lines.Length;
             float lineHeight = ImGui.GetTextLineHeight();
-            
+
             float textOffsetX = ImGui.GetStyle().FramePadding.X;
             float textOffsetY = ImGui.GetStyle().FramePadding.Y;
             float leftPad = 50.0f;
@@ -933,9 +946,9 @@ namespace Shark
             ImGui.PushItemWidth(-1);
             ImGui.PushStyleColor(ImGuiCol.FrameBg, Vector4.Zero);
             ImGui.PushStyleColor(ImGuiCol.Border, Vector4.Zero);
-            
+
             ImGui.InputTextMultiline("##editor", ref code, 1024 * 1024, new Vector2(-1, lineCount * lineHeight + 20), ImGuiInputTextFlags.AllowTabInput);
-            
+
             ImGui.PopStyleColor(2);
             ImGui.PopItemWidth();
 
@@ -952,7 +965,7 @@ namespace Shark
                 string lineNum = (i + 1).ToString();
                 float textWidth = ImGui.CalcTextSize(lineNum).X;
                 float lineY = startScreenPos.Y + textOffsetY + (i * lineHeight);
-                
+
                 if (lineY + lineHeight > winPos.Y && lineY < winPos.Y + winHeight)
                 {
                     drawList.AddText(new Vector2(winPos.X + leftPad - 10 - textWidth, lineY), numColor, lineNum);
@@ -1078,7 +1091,8 @@ namespace Shark
             int p = pos + 8;
 
             Items.Clear();
-            for (int i = 0; i < count; i++) {
+            for (int i = 0; i < count; i++)
+            {
                 T item = new T();
                 item.Load(data, p);
                 Items.Add(item);
@@ -1126,7 +1140,7 @@ namespace Shark
             List<byte> outBuf = new List<byte>((int)Size);
             outBuf.AddRange(BitConverter.GetBytes(Magic));
             outBuf.AddRange(BitConverter.GetBytes(Version));
-            outBuf.AddRange(BitConverter.GetBytes(FileSize)); 
+            outBuf.AddRange(BitConverter.GetBytes(FileSize));
             outBuf.AddRange(BitConverter.GetBytes(Endianness));
             outBuf.AddRange(BitConverter.GetBytes((uint)nameBytes.Length));
             outBuf.AddRange(nameBytes);
@@ -1267,7 +1281,7 @@ namespace Shark
     {
         public string Name { get; set; } = "";
         public string Code { get; set; } = "";
-        
+
         private uint _originalCodeLen;
         private uint _codeLen2;
 
@@ -1276,7 +1290,7 @@ namespace Shark
             Size = BitConverter.ToUInt32(data, pos);
             uint nameLen = BitConverter.ToUInt32(data, pos + 4);
             uint codeLen = BitConverter.ToUInt32(data, pos + 8);
-            
+
             _originalCodeLen = codeLen;
             _codeLen2 = BitConverter.ToUInt32(data, pos + 12);
 
@@ -1369,53 +1383,63 @@ namespace Shark
 
     public static class SharcCompiler
     {
-        static uint ReadUInt32BE(byte[] data, int pos) {
-            return (uint)(data[pos] << 24 | data[pos+1] << 16 | data[pos+2] << 8 | data[pos+3]);
+        static uint ReadUInt32BE(byte[] data, int pos)
+        {
+            return (uint)(data[pos] << 24 | data[pos + 1] << 16 | data[pos + 2] << 8 | data[pos + 3]);
         }
 
-        static void WriteUInt32LE(List<byte> list, uint val) {
+        static void WriteUInt32LE(List<byte> list, uint val)
+        {
             list.Add((byte)(val & 0xFF));
             list.Add((byte)((val >> 8) & 0xFF));
             list.Add((byte)((val >> 16) & 0xFF));
             list.Add((byte)((val >> 24) & 0xFF));
         }
 
-        static string ReadString(byte[] data, int offset) {
+        static string ReadString(byte[] data, int offset)
+        {
             int end = offset;
             while (end < data.Length && data[end] != 0) end++;
             return Encoding.UTF8.GetString(data, offset, end - offset);
         }
 
         // multiple identical entries grow the data payload but alias to the earliest instance
-        class StringTable {
+        class StringTable
+        {
             public List<byte> Data = new List<byte>();
             public int Offset;
             class Entry { public string Value = ""; public int Pos; }
             List<Entry> Items = new List<Entry>();
 
             public StringTable(int offset) { Offset = offset; }
-            
-            public void Append(string val) {
+
+            public void Append(string val)
+            {
                 Items.Add(new Entry { Value = val, Pos = Data.Count });
                 Data.AddRange(Encoding.UTF8.GetBytes(val));
                 Data.Add(0);
             }
-            public uint GetPos(string val) {
-                foreach(var entry in Items) {
+            public uint GetPos(string val)
+            {
+                foreach (var entry in Items)
+                {
                     if (entry.Value == val) return (uint)(Offset + entry.Pos);
                 }
                 return 0;
             }
         }
 
-        class GX2RBuffer {
+        class GX2RBuffer
+        {
             public uint resourceFlags, elementSize, elementCount;
-            public void Load(byte[] data, int pos) {
+            public void Load(byte[] data, int pos)
+            {
                 resourceFlags = ReadUInt32BE(data, pos);
                 elementSize = ReadUInt32BE(data, pos + 4);
                 elementCount = ReadUInt32BE(data, pos + 8);
             }
-            public void SaveLE(List<byte> outBuf) {
+            public void SaveLE(List<byte> outBuf)
+            {
                 WriteUInt32LE(outBuf, resourceFlags);
                 WriteUInt32LE(outBuf, elementSize);
                 WriteUInt32LE(outBuf, elementCount);
@@ -1423,26 +1447,31 @@ namespace Shark
             }
         }
 
-        class GX2UniformBlock {
+        class GX2UniformBlock
+        {
             public string name = "";
             public uint location, size;
-            public void Load(byte[] data, int pos, int shaderPos) {
+            public void Load(byte[] data, int pos, int shaderPos)
+            {
                 uint nameOffs = ReadUInt32BE(data, pos);
                 location = ReadUInt32BE(data, pos + 4);
                 size = ReadUInt32BE(data, pos + 8);
                 name = ReadString(data, shaderPos + (int)(nameOffs & ~0xCA700000));
             }
-            public void SaveLE(List<byte> outBuf, uint nameOffs) {
+            public void SaveLE(List<byte> outBuf, uint nameOffs)
+            {
                 WriteUInt32LE(outBuf, nameOffs);
                 WriteUInt32LE(outBuf, location);
                 WriteUInt32LE(outBuf, size);
             }
         }
 
-        class GX2UniformVar {
+        class GX2UniformVar
+        {
             public string name = "";
             public uint type, arrayCount, offset, blockIndex;
-            public void Load(byte[] data, int pos, int shaderPos) {
+            public void Load(byte[] data, int pos, int shaderPos)
+            {
                 uint nameOffs = ReadUInt32BE(data, pos);
                 type = ReadUInt32BE(data, pos + 4);
                 arrayCount = ReadUInt32BE(data, pos + 8);
@@ -1450,46 +1479,55 @@ namespace Shark
                 blockIndex = ReadUInt32BE(data, pos + 16);
                 name = ReadString(data, shaderPos + (int)(nameOffs & ~0xCA700000));
             }
-            public void SaveLE(List<byte> outBuf, uint nameOffs) {
+            public void SaveLE(List<byte> outBuf, uint nameOffs)
+            {
                 WriteUInt32LE(outBuf, nameOffs); WriteUInt32LE(outBuf, type); WriteUInt32LE(outBuf, arrayCount);
                 WriteUInt32LE(outBuf, offset); WriteUInt32LE(outBuf, blockIndex);
             }
         }
 
-        class GX2AttribVar {
+        class GX2AttribVar
+        {
             public string name = "";
             public uint type, arrayCount, location;
-            public void Load(byte[] data, int pos, int shaderPos) {
+            public void Load(byte[] data, int pos, int shaderPos)
+            {
                 uint nameOffs = ReadUInt32BE(data, pos);
                 type = ReadUInt32BE(data, pos + 4);
                 arrayCount = ReadUInt32BE(data, pos + 8);
                 location = ReadUInt32BE(data, pos + 12);
                 name = ReadString(data, shaderPos + (int)(nameOffs & ~0xCA700000));
             }
-            public void SaveLE(List<byte> outBuf, uint nameOffs) {
+            public void SaveLE(List<byte> outBuf, uint nameOffs)
+            {
                 WriteUInt32LE(outBuf, nameOffs); WriteUInt32LE(outBuf, type); WriteUInt32LE(outBuf, arrayCount); WriteUInt32LE(outBuf, location);
             }
         }
 
-        class GX2SamplerVar {
+        class GX2SamplerVar
+        {
             public string name = "";
             public uint type, location;
-            public void Load(byte[] data, int pos, int shaderPos) {
+            public void Load(byte[] data, int pos, int shaderPos)
+            {
                 uint nameOffs = ReadUInt32BE(data, pos);
                 type = ReadUInt32BE(data, pos + 4);
                 location = ReadUInt32BE(data, pos + 8);
                 name = ReadString(data, shaderPos + (int)(nameOffs & ~0xCA700000));
             }
-            public void SaveLE(List<byte> outBuf, uint nameOffs) {
+            public void SaveLE(List<byte> outBuf, uint nameOffs)
+            {
                 WriteUInt32LE(outBuf, nameOffs); WriteUInt32LE(outBuf, type); WriteUInt32LE(outBuf, location);
             }
         }
 
-        class GFDLoopVar {
+        class GFDLoopVar
+        {
             public uint offset, value;
         }
 
-        class CompiledVertexShader {
+        class CompiledVertexShader
+        {
             public uint[] regs = new uint[52];
             public byte[] shader = Array.Empty<byte>();
             public uint shaderMode, ringItemSize;
@@ -1503,7 +1541,8 @@ namespace Shark
             public List<GX2SamplerVar> samplerVariables = new List<GX2SamplerVar>();
             public List<GX2AttribVar> attribVariables = new List<GX2AttribVar>();
 
-            public void Load(byte[] data, int pos, byte[] shaderData) {
+            public void Load(byte[] data, int pos, byte[] shaderData)
+            {
                 int pos_ = pos;
                 shader = shaderData;
                 for (int i = 0; i < 52; i++) regs[i] = ReadUInt32BE(data, pos + i * 4);
@@ -1520,23 +1559,24 @@ namespace Shark
                 hasStreamOut = ReadUInt32BE(data, pos + 56) != 0;
                 pos += 60;
 
-                for (int i=0; i<4; i++) streamOutStride[i] = ReadUInt32BE(data, pos + i*4);
+                for (int i = 0; i < 4; i++) streamOutStride[i] = ReadUInt32BE(data, pos + i * 4);
                 pos += 16;
                 rbuffer.Load(data, pos);
 
                 int p = pos_ + (int)(uniformBlocksOffs & ~0xD0600000);
-                for(int i=0; i<numUniformBlocks; i++) { var b = new GX2UniformBlock(); b.Load(data, p, pos_); uniformBlocks.Add(b); p+=12; }
+                for (int i = 0; i < numUniformBlocks; i++) { var b = new GX2UniformBlock(); b.Load(data, p, pos_); uniformBlocks.Add(b); p += 12; }
                 p = pos_ + (int)(uniformVariablesOffs & ~0xD0600000);
-                for(int i=0; i<numUniformVariables; i++) { var v = new GX2UniformVar(); v.Load(data, p, pos_); uniformVariables.Add(v); p+=20; }
+                for (int i = 0; i < numUniformVariables; i++) { var v = new GX2UniformVar(); v.Load(data, p, pos_); uniformVariables.Add(v); p += 20; }
                 p = pos_ + (int)(loopVariablesOffs & ~0xD0600000);
-                for(int i=0; i<numLoopVariables; i++) { loopVariables.Add(new GFDLoopVar { offset=ReadUInt32BE(data,p), value=ReadUInt32BE(data,p+4) }); p+=8; }
+                for (int i = 0; i < numLoopVariables; i++) { loopVariables.Add(new GFDLoopVar { offset = ReadUInt32BE(data, p), value = ReadUInt32BE(data, p + 4) }); p += 8; }
                 p = pos_ + (int)(samplerVariablesOffs & ~0xD0600000);
-                for(int i=0; i<numSamplerVariables; i++) { var s = new GX2SamplerVar(); s.Load(data, p, pos_); samplerVariables.Add(s); p+=12; }
+                for (int i = 0; i < numSamplerVariables; i++) { var s = new GX2SamplerVar(); s.Load(data, p, pos_); samplerVariables.Add(s); p += 12; }
                 p = pos_ + (int)(attribVariablesOffs & ~0xD0600000);
-                for(int i=0; i<numAttribVariables; i++) { var a = new GX2AttribVar(); a.Load(data, p, pos_); attribVariables.Add(a); p+=16; }
+                for (int i = 0; i < numAttribVariables; i++) { var a = new GX2AttribVar(); a.Load(data, p, pos_); attribVariables.Add(a); p += 16; }
             }
 
-            public byte[] SaveLE() {
+            public byte[] SaveLE()
+            {
                 int offset = 308;
                 uint uniformBlocksOffs = 0, uniformVariablesOffs = 0, loopVariablesOffs = 0, samplerVariablesOffs = 0, attribVariablesOffs = 0;
 
@@ -1546,17 +1586,17 @@ namespace Shark
                 if (attribVariables.Count > 0) { attribVariablesOffs = (uint)offset; offset += attribVariables.Count * 16; }
 
                 var strTable = new StringTable(offset);
-                foreach(var b in uniformBlocks) strTable.Append(b.name);
-                foreach(var v in uniformVariables) strTable.Append(v.name);
-                foreach(var s in samplerVariables) strTable.Append(s.name);
-                foreach(var a in attribVariables) strTable.Append(a.name);
+                foreach (var b in uniformBlocks) strTable.Append(b.name);
+                foreach (var v in uniformVariables) strTable.Append(v.name);
+                foreach (var s in samplerVariables) strTable.Append(s.name);
+                foreach (var a in attribVariables) strTable.Append(a.name);
 
                 byte[] strTableB = strTable.Data.ToArray();
                 offset += strTableB.Length;
                 if (loopVariables.Count > 0) { loopVariablesOffs = (uint)offset; offset += loopVariables.Count * 8; }
 
                 List<byte> outBuf = new List<byte>();
-                for(int i=0; i<52; i++) WriteUInt32LE(outBuf, regs[i]);
+                for (int i = 0; i < 52; i++) WriteUInt32LE(outBuf, regs[i]);
                 WriteUInt32LE(outBuf, (uint)shader.Length); WriteUInt32LE(outBuf, 0);
                 WriteUInt32LE(outBuf, shaderMode);
                 WriteUInt32LE(outBuf, (uint)uniformBlocks.Count); WriteUInt32LE(outBuf, uniformBlocksOffs);
@@ -1566,19 +1606,20 @@ namespace Shark
                 WriteUInt32LE(outBuf, (uint)samplerVariables.Count); WriteUInt32LE(outBuf, samplerVariablesOffs);
                 WriteUInt32LE(outBuf, (uint)attribVariables.Count); WriteUInt32LE(outBuf, attribVariablesOffs);
                 WriteUInt32LE(outBuf, ringItemSize); WriteUInt32LE(outBuf, hasStreamOut ? 1u : 0u);
-                for(int i=0; i<4; i++) WriteUInt32LE(outBuf, streamOutStride[i]);
+                for (int i = 0; i < 4; i++) WriteUInt32LE(outBuf, streamOutStride[i]);
                 rbuffer.SaveLE(outBuf);
-                foreach(var b in uniformBlocks) b.SaveLE(outBuf, strTable.GetPos(b.name));
-                foreach(var v in uniformVariables) v.SaveLE(outBuf, strTable.GetPos(v.name));
-                foreach(var s in samplerVariables) s.SaveLE(outBuf, strTable.GetPos(s.name));
-                foreach(var a in attribVariables) a.SaveLE(outBuf, strTable.GetPos(a.name));
+                foreach (var b in uniformBlocks) b.SaveLE(outBuf, strTable.GetPos(b.name));
+                foreach (var v in uniformVariables) v.SaveLE(outBuf, strTable.GetPos(v.name));
+                foreach (var s in samplerVariables) s.SaveLE(outBuf, strTable.GetPos(s.name));
+                foreach (var a in attribVariables) a.SaveLE(outBuf, strTable.GetPos(a.name));
                 outBuf.AddRange(strTableB);
-                foreach(var l in loopVariables) { WriteUInt32LE(outBuf, l.offset); WriteUInt32LE(outBuf, l.value); }
+                foreach (var l in loopVariables) { WriteUInt32LE(outBuf, l.offset); WriteUInt32LE(outBuf, l.value); }
                 return outBuf.ToArray();
             }
         }
 
-        class CompiledPixelShader {
+        class CompiledPixelShader
+        {
             public uint[] regs = new uint[41];
             public byte[] shader = Array.Empty<byte>();
             public uint shaderMode;
@@ -1589,7 +1630,8 @@ namespace Shark
             public List<GFDLoopVar> loopVariables = new List<GFDLoopVar>();
             public List<GX2SamplerVar> samplerVariables = new List<GX2SamplerVar>();
 
-            public void Load(byte[] data, int pos, byte[] shaderData) {
+            public void Load(byte[] data, int pos, byte[] shaderData)
+            {
                 int pos_ = pos;
                 shader = shaderData;
                 for (int i = 0; i < 41; i++) regs[i] = ReadUInt32BE(data, pos + i * 4);
@@ -1605,16 +1647,17 @@ namespace Shark
                 rbuffer.Load(data, pos);
 
                 int p = pos_ + (int)(uniformBlocksOffs & ~0xD0600000);
-                for(int i=0; i<numUniformBlocks; i++) { var b = new GX2UniformBlock(); b.Load(data, p, pos_); uniformBlocks.Add(b); p+=12; }
+                for (int i = 0; i < numUniformBlocks; i++) { var b = new GX2UniformBlock(); b.Load(data, p, pos_); uniformBlocks.Add(b); p += 12; }
                 p = pos_ + (int)(uniformVariablesOffs & ~0xD0600000);
-                for(int i=0; i<numUniformVariables; i++) { var v = new GX2UniformVar(); v.Load(data, p, pos_); uniformVariables.Add(v); p+=20; }
+                for (int i = 0; i < numUniformVariables; i++) { var v = new GX2UniformVar(); v.Load(data, p, pos_); uniformVariables.Add(v); p += 20; }
                 p = pos_ + (int)(loopVariablesOffs & ~0xD0600000);
-                for(int i=0; i<numLoopVariables; i++) { loopVariables.Add(new GFDLoopVar { offset=ReadUInt32BE(data,p), value=ReadUInt32BE(data,p+4) }); p+=8; }
+                for (int i = 0; i < numLoopVariables; i++) { loopVariables.Add(new GFDLoopVar { offset = ReadUInt32BE(data, p), value = ReadUInt32BE(data, p + 4) }); p += 8; }
                 p = pos_ + (int)(samplerVariablesOffs & ~0xD0600000);
-                for(int i=0; i<numSamplerVariables; i++) { var s = new GX2SamplerVar(); s.Load(data, p, pos_); samplerVariables.Add(s); p+=12; }
+                for (int i = 0; i < numSamplerVariables; i++) { var s = new GX2SamplerVar(); s.Load(data, p, pos_); samplerVariables.Add(s); p += 12; }
             }
 
-            public byte[] SaveLE() {
+            public byte[] SaveLE()
+            {
                 int offset = 232;
                 uint uniformBlocksOffs = 0, uniformVariablesOffs = 0, loopVariablesOffs = 0, samplerVariablesOffs = 0;
 
@@ -1623,16 +1666,16 @@ namespace Shark
                 if (samplerVariables.Count > 0) { samplerVariablesOffs = (uint)offset; offset += samplerVariables.Count * 12; }
 
                 var strTable = new StringTable(offset);
-                foreach(var b in uniformBlocks) strTable.Append(b.name);
-                foreach(var v in uniformVariables) strTable.Append(v.name);
-                foreach(var s in samplerVariables) strTable.Append(s.name);
+                foreach (var b in uniformBlocks) strTable.Append(b.name);
+                foreach (var v in uniformVariables) strTable.Append(v.name);
+                foreach (var s in samplerVariables) strTable.Append(s.name);
 
                 byte[] strTableB = strTable.Data.ToArray();
                 offset += strTableB.Length;
                 if (loopVariables.Count > 0) { loopVariablesOffs = (uint)offset; offset += loopVariables.Count * 8; }
 
                 List<byte> outBuf = new List<byte>();
-                for(int i=0; i<41; i++) WriteUInt32LE(outBuf, regs[i]);
+                for (int i = 0; i < 41; i++) WriteUInt32LE(outBuf, regs[i]);
                 WriteUInt32LE(outBuf, (uint)shader.Length); WriteUInt32LE(outBuf, 0);
                 WriteUInt32LE(outBuf, shaderMode);
                 WriteUInt32LE(outBuf, (uint)uniformBlocks.Count); WriteUInt32LE(outBuf, uniformBlocksOffs);
@@ -1641,46 +1684,49 @@ namespace Shark
                 WriteUInt32LE(outBuf, (uint)loopVariables.Count); WriteUInt32LE(outBuf, loopVariablesOffs);
                 WriteUInt32LE(outBuf, (uint)samplerVariables.Count); WriteUInt32LE(outBuf, samplerVariablesOffs);
                 rbuffer.SaveLE(outBuf);
-                foreach(var b in uniformBlocks) b.SaveLE(outBuf, strTable.GetPos(b.name));
-                foreach(var v in uniformVariables) v.SaveLE(outBuf, strTable.GetPos(v.name));
-                foreach(var s in samplerVariables) s.SaveLE(outBuf, strTable.GetPos(s.name));
+                foreach (var b in uniformBlocks) b.SaveLE(outBuf, strTable.GetPos(b.name));
+                foreach (var v in uniformVariables) v.SaveLE(outBuf, strTable.GetPos(v.name));
+                foreach (var s in samplerVariables) s.SaveLE(outBuf, strTable.GetPos(s.name));
                 outBuf.AddRange(strTableB);
-                foreach(var l in loopVariables) { WriteUInt32LE(outBuf, l.offset); WriteUInt32LE(outBuf, l.value); }
+                foreach (var l in loopVariables) { WriteUInt32LE(outBuf, l.offset); WriteUInt32LE(outBuf, l.value); }
                 return outBuf.ToArray();
             }
         }
 
-        static (byte[] vHeader, byte[] vData, byte[] pHeader, byte[] pData) ReadGFD(byte[] f) {
+        static (byte[] vHeader, byte[] vData, byte[] pHeader, byte[] pData) ReadGFD(byte[] f)
+        {
             uint magic = ReadUInt32BE(f, 0);
             if (magic != 0x47667832) throw new Exception("Invalid GFD magic"); // 'Gfx2'
-            
+
             int pos = 32;
             byte[]? vHeader = null, vData = null, pHeader = null, pData = null;
-            
-            while(pos < f.Length) {
+
+            while (pos < f.Length)
+            {
                 uint bMagic = ReadUInt32BE(f, pos);
                 if (bMagic != 0x424C4B7B) break; // End of blocks / padding
-                
+
                 uint bType = ReadUInt32BE(f, pos + 16);
                 uint bDataSize = ReadUInt32BE(f, pos + 20);
-                
+
                 int dataPos = pos + 32; // Struct header is 32
                 byte[] blockData = new byte[bDataSize];
                 Array.Copy(f, dataPos, blockData, 0, bDataSize);
-                
+
                 if (bType == 3) { if (vHeader != null) throw new Exception("Multiple vertex shaders not supported"); vHeader = blockData; }
                 else if (bType == 5) { if (vData != null) throw new Exception("Multiple vertex shaders not supported"); vData = blockData; }
                 else if (bType == 6) { if (pHeader != null) throw new Exception("Multiple pixel shaders not supported"); pHeader = blockData; }
                 else if (bType == 7) { if (pData != null) throw new Exception("Multiple pixel shaders not supported"); pData = blockData; }
-                
+
                 pos = dataPos + (int)bDataSize;
             }
-            
+
             if (vHeader == null || vData == null || pHeader == null || pData == null) throw new Exception("Program missing shader data");
             return (vHeader, vData, pHeader, pData);
         }
 
-        static byte[] CreateShaderBinary(int type, byte[] shaderStructBytes, byte[] shaderCodeBytes, int absolutePos) {
+        static byte[] CreateShaderBinary(int type, byte[] shaderStructBytes, byte[] shaderCodeBytes, int absolutePos)
+        {
             int binaryPos = absolutePos + 16;
             int targetPos = (binaryPos + shaderStructBytes.Length + 0xFF) & ~0xFF;
             int padAmount = targetPos - binaryPos - shaderStructBytes.Length;
@@ -1699,7 +1745,7 @@ namespace Shark
             List<byte> outBuf = new List<byte>();
             WriteUInt32LE(outBuf, size);
             WriteUInt32LE(outBuf, (uint)type);
-            WriteUInt32LE(outBuf, 0); 
+            WriteUInt32LE(outBuf, 0);
             WriteUInt32LE(outBuf, (uint)totalBinaryLen);
             outBuf.AddRange(shaderStructBytes);
             outBuf.AddRange(padding);
@@ -1707,7 +1753,8 @@ namespace Shark
             return outBuf.ToArray();
         }
 
-        static byte[] SaveSharcfbProgram(ShaderProgram p, int i) {
+        static byte[] SaveSharcfbProgram(ShaderProgram p, int i)
+        {
             byte[] nBytes = Encoding.UTF8.GetBytes(p.Name + "\0");
             byte[] vB = p.Variations.Save(), vsB = p.VariationDefaults.Save();
             byte[] uvB = p.UniformVariables.Save(), ubB = p.UniformBlocks.Save();
@@ -1725,7 +1772,8 @@ namespace Shark
             return outBuf.ToArray();
         }
 
-        static byte[] SaveSharcfbHeader(SharcHeader originalHeader) {
+        static byte[] SaveSharcfbHeader(SharcHeader originalHeader)
+        {
             byte[] nBytes = Encoding.UTF8.GetBytes(originalHeader.Name + "\0");
             List<byte> outBuf = new List<byte>();
             WriteUInt32LE(outBuf, 0x53484142); // SHAB
@@ -1738,14 +1786,19 @@ namespace Shark
             return outBuf.ToArray();
         }
 
-        static string ProcessMacros(string code, SharcList<ShaderMacro> macros) {
+        static string ProcessMacros(string code, SharcList<ShaderMacro> macros)
+        {
             var lines = code.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
-            for(int i = 0; i < lines.Length; i++) {
-                if (lines[i].TrimStart().StartsWith("#define")) {
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (lines[i].TrimStart().StartsWith("#define"))
+                {
                     var parts = lines[i].Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-                    if (parts.Length >= 2) {
+                    if (parts.Length >= 2)
+                    {
                         var mac = macros.Items.FirstOrDefault(m => m.Name == parts[1]);
-                        if (mac != null) {
+                        if (mac != null)
+                        {
                             lines[i] = $"#define {mac.Name} {mac.Value}";
                         }
                     }
@@ -1754,17 +1807,21 @@ namespace Shark
             return string.Join("\n", lines) + "\n";
         }
 
-        public static void CompileAndSave(SharcArchive archive, string outputPath) {
+        public static void CompileAndSave(SharcArchive archive, string outputPath)
+        {
             string tempDir = Path.Combine(Path.GetTempPath(), "SharcCompiler_" + Guid.NewGuid().ToString());
             Directory.CreateDirectory(tempDir);
 
-            try {
+            try
+            {
                 var fbPrograms = new List<byte[]>();
                 var fbBinaries = new List<Func<int, byte[]>>();
 
-                for(int i = 0; i < archive.Programs.Items.Count; i++) {
+                for (int i = 0; i < archive.Programs.Items.Count; i++)
+                {
                     var prog = archive.Programs.Items[i];
-                    if (prog.VtxShIdx == -1 || prog.FrgShIdx == -1 || prog.GeoShIdx != -1) {
+                    if (prog.VtxShIdx == -1 || prog.FrgShIdx == -1 || prog.GeoShIdx != -1)
+                    {
                         throw new Exception($"Invalid shader bindings for '{prog.Name}'. Vertex and Fragment indices must be mapped, Geometry must be unmapped (-1).");
                     }
 
@@ -1780,8 +1837,9 @@ namespace Shark
                     File.WriteAllText(fPath, fCode);
 
                     string gshName = Path.Combine(tempDir, "out.gsh");
-                    
-                    var psi = new System.Diagnostics.ProcessStartInfo {
+
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
                         FileName = Program.gshCompilePath,
                         Arguments = $"-p \"{fPath}\" -v \"{vPath}\" -o \"{gshName}\" -no_limit_array_syms -nospark",
                         UseShellExecute = false,
@@ -1810,18 +1868,19 @@ namespace Shark
                 }
 
                 byte[] headerB = SaveSharcfbHeader(archive.Header);
-                
+
                 int binListStart = headerB.Length;
                 List<byte> binListBuf = new List<byte>();
                 WriteUInt32LE(binListBuf, 0); // size placeholder
                 WriteUInt32LE(binListBuf, (uint)fbBinaries.Count);
-                
-                foreach(var binFunc in fbBinaries) {
+
+                foreach (var binFunc in fbBinaries)
+                {
                     int currentAbsPos = binListStart + binListBuf.Count;
                     byte[] binBytes = binFunc(currentAbsPos);
                     binListBuf.AddRange(binBytes);
                 }
-                
+
                 uint binListSize = (uint)binListBuf.Count;
                 binListBuf[0] = (byte)(binListSize & 0xFF);
                 binListBuf[1] = (byte)((binListSize >> 8) & 0xFF);
@@ -1829,7 +1888,7 @@ namespace Shark
                 binListBuf[3] = (byte)((binListSize >> 24) & 0xFF);
 
                 List<byte> progListBuf = new List<byte>();
-                foreach(var p in fbPrograms) progListBuf.AddRange(p);
+                foreach (var p in fbPrograms) progListBuf.AddRange(p);
                 uint progListSize = (uint)(8 + progListBuf.Count);
                 List<byte> progListFull = new List<byte>();
                 WriteUInt32LE(progListFull, progListSize);
@@ -1850,7 +1909,9 @@ namespace Shark
 
                 File.WriteAllBytes(outputPath, outBytes);
 
-            } finally {
+            }
+            finally
+            {
                 Directory.Delete(tempDir, true);
             }
         }
