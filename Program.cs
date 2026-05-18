@@ -19,6 +19,8 @@ namespace Shark
 {
     class Program
     {
+        public static string gshCompilePath = "";
+
         static IWindow window = null!;
         static GL gl = null!;
         static ImGuiController imGuiController = null!;
@@ -33,11 +35,19 @@ namespace Shark
         static bool shouldExit = false;
         static bool showConfirmModal = false;
         static bool showDuplicateModal = false;
+        static bool showCompilerErrorModal = false;
+        static bool showPreferencesModal = false;
+        static string compilerErrorMessage = "";
+
         enum ConfirmAction { None, New, Open, Close, Exit }
         static ConfirmAction pendingAction = ConfirmAction.None;
 
         static void Main()
         {
+            try {
+                if (File.Exists("config.txt")) gshCompilePath = File.ReadAllText("config.txt").Trim();
+            } catch {}
+
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
             GlfwWindowing.RegisterPlatform();
@@ -47,6 +57,8 @@ namespace Shark
             options.Size = new Silk.NET.Maths.Vector2D<int>(1440, 900);
             options.Title = "Shark";
             options.VSync = false;
+            options.FramesPerSecond = 120;
+            options.UpdatesPerSecond = 120;
             window = Window.Create(options);
 
             window.Load += OnLoad;
@@ -315,6 +327,13 @@ namespace Shark
 
                     ImGui.EndMenu();
                 }
+
+                if (ImGui.BeginMenu("Edit"))
+                {
+                    if (ImGui.MenuItem("Preferences")) showPreferencesModal = true;
+                    ImGui.EndMenu();
+                }
+
                 ImGui.EndMenuBar();
             }
 
@@ -351,6 +370,8 @@ namespace Shark
         {
             if (showConfirmModal) { ImGui.OpenPopup("Confirm Action"); showConfirmModal = false; }
             if (showDuplicateModal) { ImGui.OpenPopup("Save Blocked"); showDuplicateModal = false; }
+            if (showCompilerErrorModal) { ImGui.OpenPopup("Compiler Error"); showCompilerErrorModal = false; }
+            if (showPreferencesModal) { ImGui.OpenPopup("Preferences"); showPreferencesModal = false; }
             
             bool confirmModalOpen = true;
             if (ImGui.BeginPopupModal("Confirm Action", ref confirmModalOpen, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoSavedSettings))
@@ -399,6 +420,46 @@ namespace Shark
                 if (ImGui.Button("OK", new Vector2(120, 0)))
                 {
                     pendingAction = ConfirmAction.None;
+                    ImGui.CloseCurrentPopup();
+                }
+                ImGui.EndPopup();
+            }
+
+            bool compilerErrorModalOpen = true;
+            if (ImGui.BeginPopupModal("Compiler Error", ref compilerErrorModalOpen, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoSavedSettings))
+            {
+                ImGui.TextColored(new Vector4(1.0f, 0.4f, 0.4f, 1.0f), "Compilation Error");
+                ImGui.Separator();
+                ImGui.Text(compilerErrorMessage);
+                ImGui.Spacing(); ImGui.Spacing();
+                
+                if (ImGui.Button("Close", new Vector2(100, 0)))
+                {
+                    ImGui.CloseCurrentPopup();
+                }
+                ImGui.EndPopup();
+            }
+
+            bool prefModalOpen = true;
+            if (ImGui.BeginPopupModal("Preferences", ref prefModalOpen, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoSavedSettings))
+            {
+                ImGui.Text("Compiler Path (gshCompile.exe):");
+                ImGui.SetNextItemWidth(400);
+                ImGui.InputText("##gshpath", ref gshCompilePath, 1024);
+                ImGui.SameLine();
+                if (ImGui.Button("Browse..."))
+                {
+                    string? newPath = NativeFileDialog.ShowOpenFileDialog("Executables (*.exe)|*.exe|All Files (*.*)|*.*");
+                    if (!string.IsNullOrEmpty(newPath)) 
+                    {
+                        gshCompilePath = newPath;
+                        try { File.WriteAllText("config.txt", gshCompilePath); } catch {}
+                    }
+                }
+                ImGui.Spacing(); ImGui.Spacing();
+                if (ImGui.Button("Close", new Vector2(100, 0)))
+                {
+                    try { File.WriteAllText("config.txt", gshCompilePath); } catch {}
                     ImGui.CloseCurrentPopup();
                 }
                 ImGui.EndPopup();
@@ -503,6 +564,31 @@ namespace Shark
                 }
                 ImGui.PopStyleColor(2);
             }
+
+            ImGui.SameLine(ImGui.GetContentRegionAvail().X - 80);
+            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.18f, 0.35f, 0.58f, 1.00f));
+            if (ImGui.Button("Compile..."))
+            {
+                if (HasDuplicateNames()) showDuplicateModal = true;
+                else if (!File.Exists(gshCompilePath)) 
+                {
+                    compilerErrorMessage = $"gshCompile.exe not found at:\n{gshCompilePath}\n\nPlease update the gshCompilePath via Edit -> Preferences.";
+                    showCompilerErrorModal = true;
+                }
+                else 
+                {
+                    string? path = NativeFileDialog.ShowSaveFileDialog("SharcFB Files (*.sharcfb)|*.sharcfb|All Files (*.*)|*.*");
+                    if (!string.IsNullOrEmpty(path)) 
+                    {
+                        try { SharcCompiler.CompileAndSave(archive, path); } 
+                        catch (Exception ex) { 
+                            compilerErrorMessage = "Compilation Failed:\n" + ex.Message; 
+                            showCompilerErrorModal = true; 
+                        }
+                    }
+                }
+            }
+            ImGui.PopStyleColor();
             
             ImGui.Separator();
             ImGui.Spacing();
@@ -872,40 +958,40 @@ namespace Shark
 
     public static class NativeFileDialog
     {
-        public static string? ShowOpenFileDialog()
+        public static string? ShowOpenFileDialog(string filter = "Sharc Files (*.sharc)|*.sharc|All Files (*.*)|*.*")
         {
             if (OperatingSystem.IsWindows())
             {
-                return RunProcess("powershell.exe", "-Command \"Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.OpenFileDialog; $f.Filter = 'Sharc Files (*.sharc)|*.sharc|All Files (*.*)|*.*'; $f.ShowHelp = $true; if($f.ShowDialog() -eq 'OK'){ $f.FileName }\"");
+                return RunProcess("powershell.exe", $"-Command \"Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.OpenFileDialog; $f.Filter = '{filter}'; $f.ShowHelp = $true; if($f.ShowDialog() -eq 'OK'){{ $f.FileName }}\"");
             }
             else if (OperatingSystem.IsLinux())
             {
-                string? res = RunProcess("zenity", "--file-selection --title=\"Open Sharc Archive\"");
+                string? res = RunProcess("zenity", "--file-selection --title=\"Open File\"");
                 if (string.IsNullOrEmpty(res)) res = RunProcess("kdialog", "--getopenfilename");
                 return res;
             }
             else if (OperatingSystem.IsMacOS())
             {
-                return RunProcess("osascript", "-e \"POSIX path of (choose file with prompt \\\"Select Sharc Archive\\\")\"");
+                return RunProcess("osascript", "-e \"POSIX path of (choose file with prompt \\\"Select File\\\")\"");
             }
             return null;
         }
 
-        public static string? ShowSaveFileDialog()
+        public static string? ShowSaveFileDialog(string filter = "Sharc Files (*.sharc)|*.sharc|All Files (*.*)|*.*")
         {
             if (OperatingSystem.IsWindows())
             {
-                return RunProcess("powershell.exe", "-Command \"Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.SaveFileDialog; $f.Filter = 'Sharc Files (*.sharc)|*.sharc|All Files (*.*)|*.*'; $f.ShowHelp = $true; if($f.ShowDialog() -eq 'OK'){ $f.FileName }\"");
+                return RunProcess("powershell.exe", $"-Command \"Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.SaveFileDialog; $f.Filter = '{filter}'; $f.ShowHelp = $true; if($f.ShowDialog() -eq 'OK'){{ $f.FileName }}\"");
             }
             else if (OperatingSystem.IsLinux())
             {
-                string? res = RunProcess("zenity", "--file-selection --save --title=\"Save Sharc Archive\"");
+                string? res = RunProcess("zenity", "--file-selection --save --title=\"Save File\"");
                 if (string.IsNullOrEmpty(res)) res = RunProcess("kdialog", "--getsavefilename");
                 return res;
             }
             else if (OperatingSystem.IsMacOS())
             {
-                return RunProcess("osascript", "-e \"POSIX path of (choose file name with prompt \\\"Save Sharc Archive As\\\")\"");
+                return RunProcess("osascript", "-e \"POSIX path of (choose file name with prompt \\\"Save File As\\\")\"");
             }
             return null;
         }
@@ -1269,6 +1355,495 @@ namespace Shark
             outBuf.AddRange(vB); outBuf.AddRange(vdB);
             outBuf.AddRange(uvB); outBuf.AddRange(ubB); outBuf.AddRange(svB); outBuf.AddRange(avB);
             return outBuf.ToArray();
+        }
+    }
+
+    public static class SharcCompiler
+    {
+        static uint ReadUInt32BE(byte[] data, int pos) {
+            return (uint)(data[pos] << 24 | data[pos+1] << 16 | data[pos+2] << 8 | data[pos+3]);
+        }
+
+        static void WriteUInt32LE(List<byte> list, uint val) {
+            list.Add((byte)(val & 0xFF));
+            list.Add((byte)((val >> 8) & 0xFF));
+            list.Add((byte)((val >> 16) & 0xFF));
+            list.Add((byte)((val >> 24) & 0xFF));
+        }
+
+        static string ReadString(byte[] data, int offset) {
+            int end = offset;
+            while (end < data.Length && data[end] != 0) end++;
+            return Encoding.UTF8.GetString(data, offset, end - offset);
+        }
+
+        // multiple identical entries grow the data payload but alias to the earliest instance
+        class StringTable {
+            public List<byte> Data = new List<byte>();
+            public int Offset;
+            class Entry { public string Value = ""; public int Pos; }
+            List<Entry> Items = new List<Entry>();
+
+            public StringTable(int offset) { Offset = offset; }
+            
+            public void Append(string val) {
+                Items.Add(new Entry { Value = val, Pos = Data.Count });
+                Data.AddRange(Encoding.UTF8.GetBytes(val));
+                Data.Add(0);
+            }
+            public uint GetPos(string val) {
+                foreach(var entry in Items) {
+                    if (entry.Value == val) return (uint)(Offset + entry.Pos);
+                }
+                return 0;
+            }
+        }
+
+        class GX2RBuffer {
+            public uint resourceFlags, elementSize, elementCount;
+            public void Load(byte[] data, int pos) {
+                resourceFlags = ReadUInt32BE(data, pos);
+                elementSize = ReadUInt32BE(data, pos + 4);
+                elementCount = ReadUInt32BE(data, pos + 8);
+            }
+            public void SaveLE(List<byte> outBuf) {
+                WriteUInt32LE(outBuf, resourceFlags);
+                WriteUInt32LE(outBuf, elementSize);
+                WriteUInt32LE(outBuf, elementCount);
+                WriteUInt32LE(outBuf, 0); // 4x pad
+            }
+        }
+
+        class GX2UniformBlock {
+            public string name = "";
+            public uint location, size;
+            public void Load(byte[] data, int pos, int shaderPos) {
+                uint nameOffs = ReadUInt32BE(data, pos);
+                location = ReadUInt32BE(data, pos + 4);
+                size = ReadUInt32BE(data, pos + 8);
+                name = ReadString(data, shaderPos + (int)(nameOffs & ~0xCA700000));
+            }
+            public void SaveLE(List<byte> outBuf, uint nameOffs) {
+                WriteUInt32LE(outBuf, nameOffs);
+                WriteUInt32LE(outBuf, location);
+                WriteUInt32LE(outBuf, size);
+            }
+        }
+
+        class GX2UniformVar {
+            public string name = "";
+            public uint type, arrayCount, offset, blockIndex;
+            public void Load(byte[] data, int pos, int shaderPos) {
+                uint nameOffs = ReadUInt32BE(data, pos);
+                type = ReadUInt32BE(data, pos + 4);
+                arrayCount = ReadUInt32BE(data, pos + 8);
+                offset = ReadUInt32BE(data, pos + 12);
+                blockIndex = ReadUInt32BE(data, pos + 16);
+                name = ReadString(data, shaderPos + (int)(nameOffs & ~0xCA700000));
+            }
+            public void SaveLE(List<byte> outBuf, uint nameOffs) {
+                WriteUInt32LE(outBuf, nameOffs); WriteUInt32LE(outBuf, type); WriteUInt32LE(outBuf, arrayCount);
+                WriteUInt32LE(outBuf, offset); WriteUInt32LE(outBuf, blockIndex);
+            }
+        }
+
+        class GX2AttribVar {
+            public string name = "";
+            public uint type, arrayCount, location;
+            public void Load(byte[] data, int pos, int shaderPos) {
+                uint nameOffs = ReadUInt32BE(data, pos);
+                type = ReadUInt32BE(data, pos + 4);
+                arrayCount = ReadUInt32BE(data, pos + 8);
+                location = ReadUInt32BE(data, pos + 12);
+                name = ReadString(data, shaderPos + (int)(nameOffs & ~0xCA700000));
+            }
+            public void SaveLE(List<byte> outBuf, uint nameOffs) {
+                WriteUInt32LE(outBuf, nameOffs); WriteUInt32LE(outBuf, type); WriteUInt32LE(outBuf, arrayCount); WriteUInt32LE(outBuf, location);
+            }
+        }
+
+        class GX2SamplerVar {
+            public string name = "";
+            public uint type, location;
+            public void Load(byte[] data, int pos, int shaderPos) {
+                uint nameOffs = ReadUInt32BE(data, pos);
+                type = ReadUInt32BE(data, pos + 4);
+                location = ReadUInt32BE(data, pos + 8);
+                name = ReadString(data, shaderPos + (int)(nameOffs & ~0xCA700000));
+            }
+            public void SaveLE(List<byte> outBuf, uint nameOffs) {
+                WriteUInt32LE(outBuf, nameOffs); WriteUInt32LE(outBuf, type); WriteUInt32LE(outBuf, location);
+            }
+        }
+
+        class GFDLoopVar {
+            public uint offset, value;
+        }
+
+        class CompiledVertexShader {
+            public uint[] regs = new uint[52];
+            public byte[] shader = Array.Empty<byte>();
+            public uint shaderMode, ringItemSize;
+            public bool hasStreamOut;
+            public uint[] streamOutStride = new uint[4];
+            public GX2RBuffer rbuffer = new GX2RBuffer();
+
+            public List<GX2UniformBlock> uniformBlocks = new List<GX2UniformBlock>();
+            public List<GX2UniformVar> uniformVariables = new List<GX2UniformVar>();
+            public List<GFDLoopVar> loopVariables = new List<GFDLoopVar>();
+            public List<GX2SamplerVar> samplerVariables = new List<GX2SamplerVar>();
+            public List<GX2AttribVar> attribVariables = new List<GX2AttribVar>();
+
+            public void Load(byte[] data, int pos, byte[] shaderData) {
+                int pos_ = pos;
+                shader = shaderData;
+                for (int i = 0; i < 52; i++) regs[i] = ReadUInt32BE(data, pos + i * 4);
+                pos += 208; pos += 8;
+
+                shaderMode = ReadUInt32BE(data, pos);
+                uint numUniformBlocks = ReadUInt32BE(data, pos + 4), uniformBlocksOffs = ReadUInt32BE(data, pos + 8);
+                uint numUniformVariables = ReadUInt32BE(data, pos + 12), uniformVariablesOffs = ReadUInt32BE(data, pos + 16);
+                uint numInitialValues = ReadUInt32BE(data, pos + 20), initialValuesOffs = ReadUInt32BE(data, pos + 24);
+                uint numLoopVariables = ReadUInt32BE(data, pos + 28), loopVariablesOffs = ReadUInt32BE(data, pos + 32);
+                uint numSamplerVariables = ReadUInt32BE(data, pos + 36), samplerVariablesOffs = ReadUInt32BE(data, pos + 40);
+                uint numAttribVariables = ReadUInt32BE(data, pos + 44), attribVariablesOffs = ReadUInt32BE(data, pos + 48);
+                ringItemSize = ReadUInt32BE(data, pos + 52);
+                hasStreamOut = ReadUInt32BE(data, pos + 56) != 0;
+                pos += 60;
+
+                for (int i=0; i<4; i++) streamOutStride[i] = ReadUInt32BE(data, pos + i*4);
+                pos += 16;
+                rbuffer.Load(data, pos);
+
+                int p = pos_ + (int)(uniformBlocksOffs & ~0xD0600000);
+                for(int i=0; i<numUniformBlocks; i++) { var b = new GX2UniformBlock(); b.Load(data, p, pos_); uniformBlocks.Add(b); p+=12; }
+                p = pos_ + (int)(uniformVariablesOffs & ~0xD0600000);
+                for(int i=0; i<numUniformVariables; i++) { var v = new GX2UniformVar(); v.Load(data, p, pos_); uniformVariables.Add(v); p+=20; }
+                p = pos_ + (int)(loopVariablesOffs & ~0xD0600000);
+                for(int i=0; i<numLoopVariables; i++) { loopVariables.Add(new GFDLoopVar { offset=ReadUInt32BE(data,p), value=ReadUInt32BE(data,p+4) }); p+=8; }
+                p = pos_ + (int)(samplerVariablesOffs & ~0xD0600000);
+                for(int i=0; i<numSamplerVariables; i++) { var s = new GX2SamplerVar(); s.Load(data, p, pos_); samplerVariables.Add(s); p+=12; }
+                p = pos_ + (int)(attribVariablesOffs & ~0xD0600000);
+                for(int i=0; i<numAttribVariables; i++) { var a = new GX2AttribVar(); a.Load(data, p, pos_); attribVariables.Add(a); p+=16; }
+            }
+
+            public byte[] SaveLE() {
+                int offset = 308;
+                uint uniformBlocksOffs = 0, uniformVariablesOffs = 0, loopVariablesOffs = 0, samplerVariablesOffs = 0, attribVariablesOffs = 0;
+
+                if (uniformBlocks.Count > 0) { uniformBlocksOffs = (uint)offset; offset += uniformBlocks.Count * 12; }
+                if (uniformVariables.Count > 0) { uniformVariablesOffs = (uint)offset; offset += uniformVariables.Count * 20; }
+                if (samplerVariables.Count > 0) { samplerVariablesOffs = (uint)offset; offset += samplerVariables.Count * 12; }
+                if (attribVariables.Count > 0) { attribVariablesOffs = (uint)offset; offset += attribVariables.Count * 16; }
+
+                var strTable = new StringTable(offset);
+                foreach(var b in uniformBlocks) strTable.Append(b.name);
+                foreach(var v in uniformVariables) strTable.Append(v.name);
+                foreach(var s in samplerVariables) strTable.Append(s.name);
+                foreach(var a in attribVariables) strTable.Append(a.name);
+
+                byte[] strTableB = strTable.Data.ToArray();
+                offset += strTableB.Length;
+                if (loopVariables.Count > 0) { loopVariablesOffs = (uint)offset; offset += loopVariables.Count * 8; }
+
+                List<byte> outBuf = new List<byte>();
+                for(int i=0; i<52; i++) WriteUInt32LE(outBuf, regs[i]);
+                WriteUInt32LE(outBuf, (uint)shader.Length); WriteUInt32LE(outBuf, 0);
+                WriteUInt32LE(outBuf, shaderMode);
+                WriteUInt32LE(outBuf, (uint)uniformBlocks.Count); WriteUInt32LE(outBuf, uniformBlocksOffs);
+                WriteUInt32LE(outBuf, (uint)uniformVariables.Count); WriteUInt32LE(outBuf, uniformVariablesOffs);
+                WriteUInt32LE(outBuf, 0); WriteUInt32LE(outBuf, 0);
+                WriteUInt32LE(outBuf, (uint)loopVariables.Count); WriteUInt32LE(outBuf, loopVariablesOffs);
+                WriteUInt32LE(outBuf, (uint)samplerVariables.Count); WriteUInt32LE(outBuf, samplerVariablesOffs);
+                WriteUInt32LE(outBuf, (uint)attribVariables.Count); WriteUInt32LE(outBuf, attribVariablesOffs);
+                WriteUInt32LE(outBuf, ringItemSize); WriteUInt32LE(outBuf, hasStreamOut ? 1u : 0u);
+                for(int i=0; i<4; i++) WriteUInt32LE(outBuf, streamOutStride[i]);
+                rbuffer.SaveLE(outBuf);
+                foreach(var b in uniformBlocks) b.SaveLE(outBuf, strTable.GetPos(b.name));
+                foreach(var v in uniformVariables) v.SaveLE(outBuf, strTable.GetPos(v.name));
+                foreach(var s in samplerVariables) s.SaveLE(outBuf, strTable.GetPos(s.name));
+                foreach(var a in attribVariables) a.SaveLE(outBuf, strTable.GetPos(a.name));
+                outBuf.AddRange(strTableB);
+                foreach(var l in loopVariables) { WriteUInt32LE(outBuf, l.offset); WriteUInt32LE(outBuf, l.value); }
+                return outBuf.ToArray();
+            }
+        }
+
+        class CompiledPixelShader {
+            public uint[] regs = new uint[41];
+            public byte[] shader = Array.Empty<byte>();
+            public uint shaderMode;
+            public GX2RBuffer rbuffer = new GX2RBuffer();
+
+            public List<GX2UniformBlock> uniformBlocks = new List<GX2UniformBlock>();
+            public List<GX2UniformVar> uniformVariables = new List<GX2UniformVar>();
+            public List<GFDLoopVar> loopVariables = new List<GFDLoopVar>();
+            public List<GX2SamplerVar> samplerVariables = new List<GX2SamplerVar>();
+
+            public void Load(byte[] data, int pos, byte[] shaderData) {
+                int pos_ = pos;
+                shader = shaderData;
+                for (int i = 0; i < 41; i++) regs[i] = ReadUInt32BE(data, pos + i * 4);
+                pos += 164; pos += 8;
+
+                shaderMode = ReadUInt32BE(data, pos);
+                uint numUniformBlocks = ReadUInt32BE(data, pos + 4), uniformBlocksOffs = ReadUInt32BE(data, pos + 8);
+                uint numUniformVariables = ReadUInt32BE(data, pos + 12), uniformVariablesOffs = ReadUInt32BE(data, pos + 16);
+                uint numInitialValues = ReadUInt32BE(data, pos + 20), initialValuesOffs = ReadUInt32BE(data, pos + 24);
+                uint numLoopVariables = ReadUInt32BE(data, pos + 28), loopVariablesOffs = ReadUInt32BE(data, pos + 32);
+                uint numSamplerVariables = ReadUInt32BE(data, pos + 36), samplerVariablesOffs = ReadUInt32BE(data, pos + 40);
+                pos += 44;
+                rbuffer.Load(data, pos);
+
+                int p = pos_ + (int)(uniformBlocksOffs & ~0xD0600000);
+                for(int i=0; i<numUniformBlocks; i++) { var b = new GX2UniformBlock(); b.Load(data, p, pos_); uniformBlocks.Add(b); p+=12; }
+                p = pos_ + (int)(uniformVariablesOffs & ~0xD0600000);
+                for(int i=0; i<numUniformVariables; i++) { var v = new GX2UniformVar(); v.Load(data, p, pos_); uniformVariables.Add(v); p+=20; }
+                p = pos_ + (int)(loopVariablesOffs & ~0xD0600000);
+                for(int i=0; i<numLoopVariables; i++) { loopVariables.Add(new GFDLoopVar { offset=ReadUInt32BE(data,p), value=ReadUInt32BE(data,p+4) }); p+=8; }
+                p = pos_ + (int)(samplerVariablesOffs & ~0xD0600000);
+                for(int i=0; i<numSamplerVariables; i++) { var s = new GX2SamplerVar(); s.Load(data, p, pos_); samplerVariables.Add(s); p+=12; }
+            }
+
+            public byte[] SaveLE() {
+                int offset = 232;
+                uint uniformBlocksOffs = 0, uniformVariablesOffs = 0, loopVariablesOffs = 0, samplerVariablesOffs = 0;
+
+                if (uniformBlocks.Count > 0) { uniformBlocksOffs = (uint)offset; offset += uniformBlocks.Count * 12; }
+                if (uniformVariables.Count > 0) { uniformVariablesOffs = (uint)offset; offset += uniformVariables.Count * 20; }
+                if (samplerVariables.Count > 0) { samplerVariablesOffs = (uint)offset; offset += samplerVariables.Count * 12; }
+
+                var strTable = new StringTable(offset);
+                foreach(var b in uniformBlocks) strTable.Append(b.name);
+                foreach(var v in uniformVariables) strTable.Append(v.name);
+                foreach(var s in samplerVariables) strTable.Append(s.name);
+
+                byte[] strTableB = strTable.Data.ToArray();
+                offset += strTableB.Length;
+                if (loopVariables.Count > 0) { loopVariablesOffs = (uint)offset; offset += loopVariables.Count * 8; }
+
+                List<byte> outBuf = new List<byte>();
+                for(int i=0; i<41; i++) WriteUInt32LE(outBuf, regs[i]);
+                WriteUInt32LE(outBuf, (uint)shader.Length); WriteUInt32LE(outBuf, 0);
+                WriteUInt32LE(outBuf, shaderMode);
+                WriteUInt32LE(outBuf, (uint)uniformBlocks.Count); WriteUInt32LE(outBuf, uniformBlocksOffs);
+                WriteUInt32LE(outBuf, (uint)uniformVariables.Count); WriteUInt32LE(outBuf, uniformVariablesOffs);
+                WriteUInt32LE(outBuf, 0); WriteUInt32LE(outBuf, 0);
+                WriteUInt32LE(outBuf, (uint)loopVariables.Count); WriteUInt32LE(outBuf, loopVariablesOffs);
+                WriteUInt32LE(outBuf, (uint)samplerVariables.Count); WriteUInt32LE(outBuf, samplerVariablesOffs);
+                rbuffer.SaveLE(outBuf);
+                foreach(var b in uniformBlocks) b.SaveLE(outBuf, strTable.GetPos(b.name));
+                foreach(var v in uniformVariables) v.SaveLE(outBuf, strTable.GetPos(v.name));
+                foreach(var s in samplerVariables) s.SaveLE(outBuf, strTable.GetPos(s.name));
+                outBuf.AddRange(strTableB);
+                foreach(var l in loopVariables) { WriteUInt32LE(outBuf, l.offset); WriteUInt32LE(outBuf, l.value); }
+                return outBuf.ToArray();
+            }
+        }
+
+        static (byte[] vHeader, byte[] vData, byte[] pHeader, byte[] pData) ReadGFD(byte[] f) {
+            uint magic = ReadUInt32BE(f, 0);
+            if (magic != 0x47667832) throw new Exception("Invalid GFD magic"); // 'Gfx2'
+            
+            int pos = 32;
+            byte[]? vHeader = null, vData = null, pHeader = null, pData = null;
+            
+            while(pos < f.Length) {
+                uint bMagic = ReadUInt32BE(f, pos);
+                if (bMagic != 0x424C4B7B) break; // End of blocks / padding
+                
+                uint bType = ReadUInt32BE(f, pos + 16);
+                uint bDataSize = ReadUInt32BE(f, pos + 20);
+                
+                int dataPos = pos + 32; // Struct header is 32
+                byte[] blockData = new byte[bDataSize];
+                Array.Copy(f, dataPos, blockData, 0, bDataSize);
+                
+                if (bType == 3) { if (vHeader != null) throw new Exception("Multiple vertex shaders not supported"); vHeader = blockData; }
+                else if (bType == 5) { if (vData != null) throw new Exception("Multiple vertex shaders not supported"); vData = blockData; }
+                else if (bType == 6) { if (pHeader != null) throw new Exception("Multiple pixel shaders not supported"); pHeader = blockData; }
+                else if (bType == 7) { if (pData != null) throw new Exception("Multiple pixel shaders not supported"); pData = blockData; }
+                
+                pos = dataPos + (int)bDataSize;
+            }
+            
+            if (vHeader == null || vData == null || pHeader == null || pData == null) throw new Exception("Program missing shader data");
+            return (vHeader, vData, pHeader, pData);
+        }
+
+        static byte[] CreateShaderBinary(int type, byte[] shaderStructBytes, byte[] shaderCodeBytes, int absolutePos) {
+            int binaryPos = absolutePos + 16;
+            int targetPos = (binaryPos + shaderStructBytes.Length + 0xFF) & ~0xFF;
+            int padAmount = targetPos - binaryPos - shaderStructBytes.Length;
+            byte[] padding = new byte[padAmount];
+
+            int shaderOffs = shaderStructBytes.Length + padAmount;
+            int regsLen = (type == 0) ? 208 : 164;
+            shaderStructBytes[regsLen + 4] = (byte)(shaderOffs & 0xFF);
+            shaderStructBytes[regsLen + 5] = (byte)((shaderOffs >> 8) & 0xFF);
+            shaderStructBytes[regsLen + 6] = (byte)((shaderOffs >> 16) & 0xFF);
+            shaderStructBytes[regsLen + 7] = (byte)((shaderOffs >> 24) & 0xFF);
+
+            int totalBinaryLen = shaderStructBytes.Length + padAmount + shaderCodeBytes.Length;
+            uint size = (uint)(16 + totalBinaryLen);
+
+            List<byte> outBuf = new List<byte>();
+            WriteUInt32LE(outBuf, size);
+            WriteUInt32LE(outBuf, (uint)type);
+            WriteUInt32LE(outBuf, 0); 
+            WriteUInt32LE(outBuf, (uint)totalBinaryLen);
+            outBuf.AddRange(shaderStructBytes);
+            outBuf.AddRange(padding);
+            outBuf.AddRange(shaderCodeBytes);
+            return outBuf.ToArray();
+        }
+
+        static byte[] SaveSharcfbProgram(ShaderProgram p, int i) {
+            byte[] nBytes = Encoding.UTF8.GetBytes(p.Name + "\0");
+            byte[] vB = p.Variations.Save(), vsB = p.VariationDefaults.Save();
+            byte[] uvB = p.UniformVariables.Save(), ubB = p.UniformBlocks.Save();
+            byte[] svB = p.SamplerVariables.Save(), avB = p.AttribVariables.Save();
+
+            uint size = (uint)(16 + nBytes.Length + vB.Length + vsB.Length + uvB.Length + ubB.Length + svB.Length + avB.Length);
+            List<byte> outBuf = new List<byte>();
+            WriteUInt32LE(outBuf, size);
+            WriteUInt32LE(outBuf, (uint)nBytes.Length);
+            WriteUInt32LE(outBuf, 3); // kind = 3
+            WriteUInt32LE(outBuf, (uint)(i * 2)); // baseIndex
+            outBuf.AddRange(nBytes);
+            outBuf.AddRange(vB); outBuf.AddRange(vsB);
+            outBuf.AddRange(uvB); outBuf.AddRange(ubB); outBuf.AddRange(svB); outBuf.AddRange(avB);
+            return outBuf.ToArray();
+        }
+
+        static byte[] SaveSharcfbHeader(SharcHeader originalHeader) {
+            byte[] nBytes = Encoding.UTF8.GetBytes(originalHeader.Name + "\0");
+            List<byte> outBuf = new List<byte>();
+            WriteUInt32LE(outBuf, 0x53484142); // SHAB
+            WriteUInt32LE(outBuf, 8); // version
+            WriteUInt32LE(outBuf, 0); // fileSize placeholder
+            WriteUInt32LE(outBuf, 1); // endianness
+            WriteUInt32LE(outBuf, 0); // 4 padding bytes
+            WriteUInt32LE(outBuf, (uint)nBytes.Length);
+            outBuf.AddRange(nBytes);
+            return outBuf.ToArray();
+        }
+
+        static string ProcessMacros(string code, SharcList<ShaderMacro> macros) {
+            var lines = code.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+            for(int i = 0; i < lines.Length; i++) {
+                if (lines[i].TrimStart().StartsWith("#define")) {
+                    var parts = lines[i].Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length >= 2) {
+                        var mac = macros.Items.FirstOrDefault(m => m.Name == parts[1]);
+                        if (mac != null) {
+                            lines[i] = $"#define {mac.Name} {mac.Value}";
+                        }
+                    }
+                }
+            }
+            return string.Join("\n", lines) + "\n";
+        }
+
+        public static void CompileAndSave(SharcArchive archive, string outputPath) {
+            string tempDir = Path.Combine(Path.GetTempPath(), "SharcCompiler_" + Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tempDir);
+
+            try {
+                var fbPrograms = new List<byte[]>();
+                var fbBinaries = new List<Func<int, byte[]>>();
+
+                for(int i = 0; i < archive.Programs.Items.Count; i++) {
+                    var prog = archive.Programs.Items[i];
+                    if (prog.VtxShIdx == -1 || prog.FrgShIdx == -1 || prog.GeoShIdx != -1) {
+                        throw new Exception($"Invalid shader bindings for '{prog.Name}'. Vertex and Fragment indices must be mapped, Geometry must be unmapped (-1).");
+                    }
+
+                    var vtxSrc = archive.Codes.Items[prog.VtxShIdx];
+                    var frgSrc = archive.Codes.Items[prog.FrgShIdx];
+
+                    string vCode = ProcessMacros(vtxSrc.Code, prog.VertexMacros);
+                    string fCode = ProcessMacros(frgSrc.Code, prog.FragmentMacros);
+
+                    string vPath = Path.Combine(tempDir, vtxSrc.Name);
+                    string fPath = Path.Combine(tempDir, frgSrc.Name);
+                    File.WriteAllText(vPath, vCode);
+                    File.WriteAllText(fPath, fCode);
+
+                    string gshName = Path.Combine(tempDir, "out.gsh");
+                    
+                    var psi = new System.Diagnostics.ProcessStartInfo {
+                        FileName = Program.gshCompilePath,
+                        Arguments = $"-p \"{fPath}\" -v \"{vPath}\" -o \"{gshName}\" -no_limit_array_syms -nospark",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+                    var pProcess = System.Diagnostics.Process.Start(psi);
+                    pProcess?.WaitForExit();
+
+                    if (!File.Exists(gshName)) throw new Exception($"Compiler failed to output 'out.gsh' for '{prog.Name}'. Verify the shader code compiles correctly manually.");
+
+                    byte[] gshData = File.ReadAllBytes(gshName);
+                    var (vHeader, vData, pHeader, pData) = ReadGFD(gshData);
+
+                    var compVtx = new CompiledVertexShader();
+                    compVtx.Load(vHeader, 0, vData);
+                    byte[] vStructBytes = compVtx.SaveLE();
+
+                    var compPix = new CompiledPixelShader();
+                    compPix.Load(pHeader, 0, pData);
+                    byte[] pStructBytes = compPix.SaveLE();
+
+                    fbBinaries.Add((absPos) => CreateShaderBinary(0, vStructBytes, compVtx.shader, absPos));
+                    fbBinaries.Add((absPos) => CreateShaderBinary(1, pStructBytes, compPix.shader, absPos));
+
+                    fbPrograms.Add(SaveSharcfbProgram(prog, i));
+                }
+
+                byte[] headerB = SaveSharcfbHeader(archive.Header);
+                
+                int binListStart = headerB.Length;
+                List<byte> binListBuf = new List<byte>();
+                WriteUInt32LE(binListBuf, 0); // size placeholder
+                WriteUInt32LE(binListBuf, (uint)fbBinaries.Count);
+                
+                foreach(var binFunc in fbBinaries) {
+                    int currentAbsPos = binListStart + binListBuf.Count;
+                    byte[] binBytes = binFunc(currentAbsPos);
+                    binListBuf.AddRange(binBytes);
+                }
+                
+                uint binListSize = (uint)binListBuf.Count;
+                binListBuf[0] = (byte)(binListSize & 0xFF);
+                binListBuf[1] = (byte)((binListSize >> 8) & 0xFF);
+                binListBuf[2] = (byte)((binListSize >> 16) & 0xFF);
+                binListBuf[3] = (byte)((binListSize >> 24) & 0xFF);
+
+                List<byte> progListBuf = new List<byte>();
+                foreach(var p in fbPrograms) progListBuf.AddRange(p);
+                uint progListSize = (uint)(8 + progListBuf.Count);
+                List<byte> progListFull = new List<byte>();
+                WriteUInt32LE(progListFull, progListSize);
+                WriteUInt32LE(progListFull, (uint)fbPrograms.Count);
+                progListFull.AddRange(progListBuf);
+
+                List<byte> finalFile = new List<byte>();
+                finalFile.AddRange(headerB);
+                finalFile.AddRange(binListBuf);
+                finalFile.AddRange(progListFull);
+
+                byte[] outBytes = finalFile.ToArray();
+                uint totalLen = (uint)outBytes.Length;
+                outBytes[8] = (byte)(totalLen & 0xFF);
+                outBytes[9] = (byte)((totalLen >> 8) & 0xFF);
+                outBytes[10] = (byte)((totalLen >> 16) & 0xFF);
+                outBytes[11] = (byte)((totalLen >> 24) & 0xFF);
+
+                File.WriteAllBytes(outputPath, outBytes);
+
+            } finally {
+                Directory.Delete(tempDir, true);
+            }
         }
     }
 }
