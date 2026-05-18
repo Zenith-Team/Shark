@@ -13,6 +13,9 @@
     <OptimizationPreference>Size</OptimizationPreference>
     <DebuggerSupport>false</DebuggerSupport>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
+    <NativeDebugSymbols>false</NativeDebugSymbols>
   </PropertyGroup>
 
   <ItemGroup>
