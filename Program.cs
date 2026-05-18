@@ -525,14 +525,21 @@ namespace Shark
 
             ImGui.BeginChild("LeftPaneBg", new Vector2(0, 0), true);
 
+            var style = ImGui.GetStyle();
+            float windowVisibleX2 = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
+            float nextX;
+
             if (ImGui.Button("+ Program")) archive.Programs.Items.Add(new ShaderProgram { Name = "NewProgram" });
-            ImGui.SameLine();
+            
+            nextX = ImGui.GetItemRectMax().X + style.ItemSpacing.X + ImGui.CalcTextSize("+ Source").X + style.FramePadding.X * 2.0f;
+            if (nextX < windowVisibleX2) ImGui.SameLine();
             if (ImGui.Button("+ Source")) archive.Codes.Items.Add(new ShaderSource { Name = "new_source.glsl", Code = "// Write GLSL here\n" });
             
             bool hasSelection = selectedIndex >= 0;
             if (hasSelection)
             {
-                ImGui.SameLine();
+                nextX = ImGui.GetItemRectMax().X + style.ItemSpacing.X + ImGui.CalcTextSize("Duplicate").X + style.FramePadding.X * 2.0f;
+                if (nextX < windowVisibleX2) ImGui.SameLine();
                 if (ImGui.Button("Duplicate"))
                 {
                     if (selectedType == 0 && selectedIndex < archive.Programs.Items.Count)
@@ -553,7 +560,8 @@ namespace Shark
                     }
                 }
                 
-                ImGui.SameLine();
+                nextX = ImGui.GetItemRectMax().X + style.ItemSpacing.X + ImGui.CalcTextSize("Delete").X + style.FramePadding.X * 2.0f;
+                if (nextX < windowVisibleX2) ImGui.SameLine();
                 ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.6f, 0.2f, 0.2f, 1.0f));
                 ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.8f, 0.3f, 0.3f, 1.0f));
                 if (ImGui.Button("Delete"))
@@ -565,7 +573,8 @@ namespace Shark
                 ImGui.PopStyleColor(2);
             }
 
-            ImGui.SameLine(ImGui.GetContentRegionAvail().X - 80);
+            nextX = ImGui.GetItemRectMax().X + style.ItemSpacing.X + ImGui.CalcTextSize("Compile...").X + style.FramePadding.X * 2.0f;
+            if (nextX < windowVisibleX2) ImGui.SameLine();
             ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.18f, 0.35f, 0.58f, 1.00f));
             if (ImGui.Button("Compile..."))
             {
