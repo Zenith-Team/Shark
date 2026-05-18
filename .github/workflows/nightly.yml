@@ -1,10 +1,13 @@
-name: Nightly Build
+name: Nightly
 
 on:
     push:
 
 permissions:
     contents: write
+
+env:
+    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
     prepare:
@@ -49,16 +52,39 @@ jobs:
               with:
                   dotnet-version: "8.0.x"
 
-            - name: Install dependencies (linux)
-              if: runner.os == 'Linux'
+            - name: Install build tools (linux-x64)
+              if: matrix.rid == 'linux-x64'
               run: |
                   sudo apt-get update -q
                   sudo apt-get install -y clang zlib1g-dev
 
-            - name: Install dependencies (linux-arm64)
+            - name: Install build tools (linux-arm64 cross-compile)
               if: matrix.rid == 'linux-arm64'
               run: |
-                  sudo apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+                  sudo dpkg --add-architecture arm64
+
+                  if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+                      sudo sed -i \
+                          's/^Architectures:.*/Architectures: amd64/' \
+                          /etc/apt/sources.list.d/ubuntu.sources
+                  fi
+                  sudo sed -i \
+                      's/^deb http/deb [arch=amd64] http/' \
+                      /etc/apt/sources.list 2>/dev/null || true
+
+                  CODENAME=$(lsb_release -cs)
+                  sudo tee /etc/apt/sources.list.d/arm64-ports.list > /dev/null <<EOF
+                  deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME} main restricted universe
+                  deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME}-updates main restricted universe
+                  EOF
+
+                  sudo apt-get update -q
+                  sudo apt-get install -y \
+                      clang \
+                      gcc-aarch64-linux-gnu \
+                      binutils-aarch64-linux-gnu \
+                      zlib1g-dev \
+                      zlib1g-dev:arm64
 
             - name: Publish
               run: >
@@ -68,17 +94,11 @@ jobs:
                   --self-contained
                   -o out
 
-            - name: Package publish directory
-              shell: bash
-              run: |
-                  cd out
-                  zip -r ../Shark-${{ matrix.rid }}.zip .
-
-            - name: Stage artifact
+            - name: Upload build artifact
               uses: actions/upload-artifact@v4
               with:
                   name: Shark-${{ matrix.rid }}
-                  path: Shark-${{ matrix.rid }}.zip
+                  path: out/
                   retention-days: 1
 
     release:
@@ -86,11 +106,18 @@ jobs:
         needs: [prepare, build]
         runs-on: ubuntu-latest
         steps:
-            - name: Download all staged zips
+            - name: Download all build artifacts
               uses: actions/download-artifact@v4
               with:
                   path: dist
-                  merge-multiple: true
+
+            - name: Zip each platform directory
+              run: |
+                  mkdir zips
+                  for dir in dist/*/; do
+                      name=$(basename "$dir")
+                      (cd "$dir" && zip -r "../../zips/${name}.zip" .)
+                  done
 
             - name: Create release
               uses: softprops/action-gh-release@v2
@@ -103,4 +130,4 @@ jobs:
                       Branch: ${{ github.ref_name }}
                   prerelease: true
                   draft: false
-                  files: dist/*.zip
+                  files: zips/*.zip
