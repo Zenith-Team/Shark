@@ -33,14 +33,11 @@ jobs:
                     - runner: ubuntu-latest
                       rid: linux-x64
 
-                    - runner: ubuntu-latest
-                      rid: linux-arm64
+                    - runner: macos-latest
+                      rid: macos-arm64
 
                     - runner: macos-latest
-                      rid: osx-arm64
-
-                    - runner: macos-latest
-                      rid: osx-x64
+                      rid: macos-x64
 
         runs-on: ${{ matrix.runner }}
 
@@ -57,34 +54,6 @@ jobs:
               run: |
                   sudo apt-get update -q
                   sudo apt-get install -y clang zlib1g-dev
-
-            - name: Install build tools (linux-arm64 cross-compile)
-              if: matrix.rid == 'linux-arm64'
-              run: |
-                  sudo dpkg --add-architecture arm64
-
-                  if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
-                      sudo sed -i \
-                          's/^Architectures:.*/Architectures: amd64/' \
-                          /etc/apt/sources.list.d/ubuntu.sources
-                  fi
-                  sudo sed -i \
-                      's/^deb http/deb [arch=amd64] http/' \
-                      /etc/apt/sources.list 2>/dev/null || true
-
-                  CODENAME=$(lsb_release -cs)
-                  sudo tee /etc/apt/sources.list.d/arm64-ports.list > /dev/null <<EOF
-                  deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME} main restricted universe
-                  deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME}-updates main restricted universe
-                  EOF
-
-                  sudo apt-get update -q
-                  sudo apt-get install -y \
-                      clang \
-                      gcc-aarch64-linux-gnu \
-                      binutils-aarch64-linux-gnu \
-                      zlib1g-dev \
-                      zlib1g-dev:arm64
 
             - name: Publish
               run: >
