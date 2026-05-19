@@ -88,7 +88,8 @@ jobs:
                       (cd "$dir" && zip -r "../../zips/${name}.zip" .)
                   done
 
-            - name: Create release
+            - name: Create draft release and upload assets
+              id: create_draft
               uses: softprops/action-gh-release@v2
               with:
                   tag_name: ${{ needs.prepare.outputs.tag }}
@@ -98,5 +99,12 @@ jobs:
                       Commit: ${{ github.sha }}
                       Branch: ${{ github.ref_name }}
                   prerelease: true
-                  draft: false
+                  draft: true
                   files: zips/*.zip
+
+            - name: Publish draft release
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: ${{ needs.prepare.outputs.tag }}
+                  draft: false
+                  prerelease: true
