@@ -71,6 +71,8 @@ namespace Shark
         {
             gl = window.CreateOpenGL();
             inputContext = window.CreateInput();
+            
+            float dpiScale = (float)window.FramebufferSize.X / window.Size.X;
 
             imGuiController = new ImGuiController(gl, window, inputContext, onConfigureIO: () =>
             {
@@ -91,11 +93,10 @@ namespace Shark
                             stream.CopyTo(writeStream);
                         }
 
-                        float oversampleScale = 2.0f;
                         float baseFontSize = 16.0f;
 
-                        var font = io.Fonts.AddFontFromMemoryTTF((IntPtr)nativePtr, fontDataLength, baseFontSize * oversampleScale);
-                        font.Scale = 1.0f / oversampleScale;
+                        var font = io.Fonts.AddFontFromMemoryTTF((IntPtr)nativePtr, fontDataLength, baseFontSize * dpiScale);
+                        font.Scale = 1.0f / dpiScale;
                     }
                 }
                 else
@@ -105,6 +106,9 @@ namespace Shark
             });
 
             ApplyProTheme();
+            
+            if (dpiScale != 1.0f)
+                ImGui.GetStyle().ScaleAllSizes(dpiScale);
         }
 
         private static void OnFileDrop(string[] files)
