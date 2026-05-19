@@ -34,10 +34,10 @@ jobs:
                       rid: linux-x64
 
                     - runner: macos-latest
-                      rid: macos-arm64
+                      rid: osx-arm64
 
                     - runner: macos-latest
-                      rid: macos-x64
+                      rid: osx-x64
 
         runs-on: ${{ matrix.runner }}
 
