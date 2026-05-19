@@ -36,12 +36,18 @@ namespace Shark
 
         enum ConfirmAction { None, New, Open, Close, Exit }
         static ConfirmAction pendingAction = ConfirmAction.None;
+        static float uiScale = 1.0f;
 
         static void Main()
         {
             try
             {
-                if (File.Exists("config.txt")) gshCompilePath = File.ReadAllText("config.txt").Trim();
+                if (File.Exists("config.txt"))
+                {
+                    var lines = File.ReadAllLines("config.txt");
+                    if (lines.Length > 0) gshCompilePath = lines[0].Trim();
+                    if (lines.Length > 1) float.TryParse(lines[1], out uiScale);
+                }
             }
             catch { }
 
@@ -94,9 +100,9 @@ namespace Shark
                         }
 
                         float baseFontSize = 16.0f;
-
-                        var font = io.Fonts.AddFontFromMemoryTTF((IntPtr)nativePtr, fontDataLength, baseFontSize * dpiScale);
-                        font.Scale = 1.0f / dpiScale;
+                        float oversample = 2.0f;
+                        var font = io.Fonts.AddFontFromMemoryTTF((IntPtr)nativePtr, fontDataLength, baseFontSize * uiScale * oversample);
+                        font.Scale = 1.0f / oversample;
                     }
                 }
                 else
@@ -444,6 +450,7 @@ namespace Shark
             bool prefModalOpen = true;
             if (ImGui.BeginPopupModal("Preferences", ref prefModalOpen, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoSavedSettings))
             {
+                ImGui.SliderFloat("UI Scale", ref uiScale, 0.5f, 3.0f);
                 ImGui.Text("Compiler Path (gshCompile.exe):");
                 ImGui.SetNextItemWidth(400);
                 ImGui.InputText("##gshpath", ref gshCompilePath, 1024);
@@ -458,10 +465,9 @@ namespace Shark
                     }
                 }
                 ImGui.Spacing(); ImGui.Spacing();
-                if (ImGui.Button("Close", new Vector2(100, 0)))
+                if (ImGui.Button("Save"))
                 {
-                    try { File.WriteAllText("config.txt", gshCompilePath); } catch { }
-                    ImGui.CloseCurrentPopup();
+                    File.WriteAllLines("config.txt", [gshCompilePath, uiScale.ToString()]);
                 }
                 ImGui.EndPopup();
             }
