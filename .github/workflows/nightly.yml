@@ -94,6 +94,7 @@ jobs:
                   GH_REPO: ${{ github.repository }}
               run: |
                   gh release create "${{ needs.prepare.outputs.tag }}" zips/*.zip \
+                      --repo "$GH_REPO" \
                       --title "Nightly - ${{ needs.prepare.outputs.tag }}" \
                       --notes "Automated nightly build.
                   Commit: ${{ github.sha }}
@@ -106,4 +107,4 @@ jobs:
               env:
                   GH_TOKEN: ${{ github.token }}
               run: |
-                  gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --prerelease
+                  gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --prerelease --repo "$GH_REPO"
