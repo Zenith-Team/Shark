@@ -18,7 +18,7 @@ jobs:
         steps:
             - name: Derive tag from commit SHA
               id: tag
-              run: echo "tag=nightly-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+              run: echo "tag=nightly-${GITHUB_SHA::7}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
     build:
         name: Build (${{ matrix.rid }})
@@ -88,23 +88,21 @@ jobs:
                       (cd "$dir" && zip -r "../../zips/${name}.zip" .)
                   done
 
-            - name: Create draft release and upload assets
-              id: create_draft
-              uses: softprops/action-gh-release@v2
-              with:
-                  tag_name: ${{ needs.prepare.outputs.tag }}
-                  name: "Nightly - ${{ needs.prepare.outputs.tag }}"
-                  body: |
-                      Automated nightly build.
-                      Commit: ${{ github.sha }}
-                      Branch: ${{ github.ref_name }}
-                  prerelease: true
-                  draft: true
-                  files: zips/*.zip
+            - name: Create draft release with assets
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  gh release create "${{ needs.prepare.outputs.tag }}" zips/*.zip \
+                      --title "Nightly - ${{ needs.prepare.outputs.tag }}" \
+                      --notes "Automated nightly build.
+                  Commit: ${{ github.sha }}
+                  Branch: ${{ github.ref_name }}" \
+                      --prerelease \
+                      --draft \
+                      --target "${{ github.sha }}"
 
-            - name: Publish draft release
-              uses: softprops/action-gh-release@v2
-              with:
-                  tag_name: ${{ needs.prepare.outputs.tag }}
-                  draft: false
-                  prerelease: true
+            - name: Publish the draft release
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --prerelease
