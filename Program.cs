@@ -567,6 +567,37 @@ namespace Shark
                     }
                 }
 
+                if (selectedType == 1 && selectedIndex < archive.Codes.Items.Count) {
+                    if (ImGui.Button("Export")) {
+                        string? path = NativeFileDialog.ShowSaveFileDialog();
+                        if (!string.IsNullOrEmpty(path)) {
+                            try {
+                                var code = archive.Codes.Items[selectedIndex];
+                                byte[] outputBytes = code.Save();
+                                File.WriteAllBytes(path, outputBytes);
+                            } catch (Exception ex) {
+                                Console.WriteLine(ex);
+                            }
+                        }
+                        
+                    }
+
+                    if (ImGui.Button("Import")) {
+                        string? path = NativeFileDialog.ShowOpenFileDialog();
+                        if (!string.IsNullOrEmpty(path)) {
+                            try {
+                                byte[] fileData = File.ReadAllBytes(path);
+                                Console.WriteLine($"read {fileData.Length} bytes from {path}");
+                                var code = archive.Codes.Items[selectedIndex];
+                                code.Code = Encoding.GetEncoding("shift_jis").GetString(fileData, 0, fileData.Length);
+                            } catch (Exception ex) {
+                                Console.WriteLine(ex);
+                            }
+                        }
+                    }
+                }
+
+
                 nextX = ImGui.GetItemRectMax().X + style.ItemSpacing.X + ImGui.CalcTextSize("Delete").X + style.FramePadding.X * 2.0f;
                 if (nextX < windowVisibleX2) ImGui.SameLine();
                 ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.6f, 0.2f, 0.2f, 1.0f));
@@ -1301,6 +1332,7 @@ namespace Shark
 
             int p = pos + 16;
             Name = StringUtils.ReadZString(data, p, (int)nameLen); p += (int)nameLen;
+            
             Code = Encoding.GetEncoding("shift_jis").GetString(data, p, (int)codeLen);
         }
 
@@ -1850,6 +1882,7 @@ namespace Shark
                         UseShellExecute = false,
                         CreateNoWindow = true
                     };
+                    Console.WriteLine(psi.Arguments);
                     var pProcess = System.Diagnostics.Process.Start(psi);
                     pProcess?.WaitForExit();
 
